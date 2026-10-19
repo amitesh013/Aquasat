@@ -1,5 +1,37 @@
 # AquaSat
 
+AquaSat is transitioning from a Streamlit-and-CSV prototype to a React + FastAPI dashboard backed by a relational database. The React app is under `frontend/`; the existing Streamlit UI remains available as a legacy/research interface. Neon PostgreSQL is the selected hosted database, while SQLite provides an offline local-development option. The API currently imports the reviewed dashboard CSV snapshot into the database; automated CMWSSB, IMD, or Earth Engine ingestion is not enabled.
+
+## Run the React dashboard locally
+
+Requirements: Python 3.10 or newer, Node.js 20.19+ (or 22.12+), npm, and the project CSV outputs in this folder.
+
+```powershell
+python -m pip install -r requirements-api.txt
+Set-ExecutionPolicy -Scope Process Bypass
+.\run_react.ps1
+```
+
+Open `http://127.0.0.1:5173`. The launcher starts FastAPI at `http://127.0.0.1:8765`, syncs the three dashboard CSV outputs into a local SQLite database on first request, and runs the Vite development server. Stop it with Ctrl+C. The API's interactive schema is at `http://127.0.0.1:8765/docs`.
+
+For a manual two-terminal run, start `python -m uvicorn aquasat_api:app --host 127.0.0.1 --port 8765` from the repository root, then run `npm install` and `npm run dev` from `frontend/`.
+
+### Use Neon PostgreSQL
+
+Copy `.env.example` to `.env`, put your Neon connection string in `DATABASE_URL`, and keep `.env` out of Git. Use Neon’s PostgreSQL connection string with SSL enabled. Then, from the repository root, run:
+
+```powershell
+python -m pip install -r requirements-api.txt
+alembic upgrade head
+python sync_aquasat_database.py
+```
+
+Then launch the API and React UI as above. For a separately hosted frontend, set `VITE_API_BASE_URL` to the API's HTTPS base URL and add the frontend's HTTPS origin to `AQUASAT_CORS_ORIGINS`. Never put the database URL in frontend variables or commit it.
+
+The initial schema stores reservoirs, official and Sentinel-2 observations, forecast rows, calibration metrics, and source-file hashes/sync times. The UI reads the existing forecast and satellite outputs; it does not retrain a model or improve accuracy just because the data now sits in PostgreSQL. Scheduled ingestion and production hosting still need to be configured separately.
+
+The old Streamlit interface can still be launched with `python -m streamlit run app.py` after installing `requirements.txt`. The simpler `run_aquasat.ps1` launcher is retained for that legacy UI.
+
 AquaSat is a research demonstration for satellite-based reservoir storage estimation and forecasting for Chennai.
 
 ## Current state
