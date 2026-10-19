@@ -1,0 +1,8 @@
+-r requirements.txt
+numpy
+scipy
+scikit-learn
+earthengine-api
+openpyxl
+prophet
+xgboost

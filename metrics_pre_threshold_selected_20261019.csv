@@ -1,0 +1,6 @@
+reservoir,valid_up_to_mcft,model,rmse,bias,low_storage_bias,n_matched,cv_method,cv_splits,validation_source,low_storage_pairs,low_storage_rmse
+poondi,,Expanding isotonic (S2 clear95),397.7,-165.5,11.6,194,expanding-window chronological,"prior-only, per acquisition",Sentinel-2 v3 clear95; >=95% clear area; >=99.5% footprint,37,48.6
+cholavaram,,Expanding isotonic (S2 clear95),72.4,-0.6,3.9,197,expanding-window chronological,"prior-only, per acquisition",Sentinel-2 v3 clear95; >=95% clear area; >=99.5% footprint,134,38.0
+puzhal,,Expanding isotonic (S2 clear95),320.7,71.6,31.7,176,expanding-window chronological,"prior-only, per acquisition",Sentinel-2 v3 clear95; >=95% clear area; >=99.5% footprint,12,38.3
+chembarambakkam,,Expanding isotonic (S2 clear95),285.2,48.6,28.5,165,expanding-window chronological,"prior-only, per acquisition",Sentinel-2 v3 clear95; >=95% clear area; >=99.5% footprint,24,68.4
+veeranam,,Expanding isotonic (S2 clear95),281.7,3.9,-0.1,143,expanding-window chronological,"prior-only, per acquisition",Sentinel-2 v3 clear95; >=95% clear area; >=99.5% footprint,27,92.4

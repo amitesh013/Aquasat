@@ -1,0 +1,228 @@
+{
+  "input_candidate": ".\\reviewed_ground_truth_2016_2026_candidate.csv",
+  "archive_input": ".\\veeranam_cmwssb_archive_2016_2022.csv",
+  "output_candidate": ".\\reviewed_ground_truth_2016_2026_veeranam_merged_candidate.csv",
+  "archive_records": 2191,
+  "archive_values_added": 2116,
+  "archive_matching_values_already_present": 52,
+  "conflicting_values_kept_for_review": 23,
+  "new_date_rows_added": 17,
+  "output_rows": 3929,
+  "existing_candidate_unchanged": true,
+  "merge_rule": "Fill blank Veeranam cells and add missing-date rows from the CMWSSB Veeranam archive. Preserve nonblank candidate values; list disagreements for review. Archive dashes remain blank.",
+  "archive_duplicate_resolution": "The archive extraction retained the first same-date value and reported two later duplicate alternatives in veeranam_cmwssb_archive_2016_2022.report.json.",
+  "per_year": {
+    "2019": {
+      "archive_rows": 365,
+      "values_added": 337,
+      "matching_existing": 22,
+      "conflicts_kept": 6,
+      "rows_added": 2
+    },
+    "2017": {
+      "archive_rows": 336,
+      "values_added": 335,
+      "matching_existing": 1,
+      "conflicts_kept": 0,
+      "rows_added": 4
+    },
+    "2022": {
+      "archive_rows": 365,
+      "values_added": 349,
+      "matching_existing": 6,
+      "conflicts_kept": 10,
+      "rows_added": 2
+    },
+    "2020": {
+      "archive_rows": 364,
+      "values_added": 351,
+      "matching_existing": 9,
+      "conflicts_kept": 4,
+      "rows_added": 2
+    },
+    "2018": {
+      "archive_rows": 31,
+      "values_added": 30,
+      "matching_existing": 1,
+      "conflicts_kept": 0,
+      "rows_added": 0
+    },
+    "2021": {
+      "archive_rows": 364,
+      "values_added": 348,
+      "matching_existing": 13,
+      "conflicts_kept": 3,
+      "rows_added": 0
+    },
+    "2016": {
+      "archive_rows": 366,
+      "values_added": 366,
+      "matching_existing": 0,
+      "conflicts_kept": 0,
+      "rows_added": 7
+    }
+  },
+  "conflicts": [
+    {
+      "date": "2019-01-31",
+      "candidate_value": "1350.74",
+      "archive_value": "1350.79",
+      "source_url": "https://cmwssb.tn.gov.in/statistics/veeranam%2019.htm",
+      "resolution": "kept existing candidate value; review source conflict"
+    },
+    {
+      "date": "2019-02-05",
+      "candidate_value": "1199.68",
+      "archive_value": "1297.28",
+      "source_url": "https://cmwssb.tn.gov.in/statistics/veeranam%2019.htm",
+      "resolution": "kept existing candidate value; review source conflict"
+    },
+    {
+      "date": "2019-06-05",
+      "candidate_value": "438.12",
+      "archive_value": "700.52",
+      "source_url": "https://cmwssb.tn.gov.in/statistics/veeranam%2019.htm",
+      "resolution": "kept existing candidate value; review source conflict"
+    },
+    {
+      "date": "2019-08-07",
+      "candidate_value": "810.5",
+      "archive_value": "78.7",
+      "source_url": "https://cmwssb.tn.gov.in/statistics/veeranam%2019.htm",
+      "resolution": "kept existing candidate value; review source conflict"
+    },
+    {
+      "date": "2019-08-29",
+      "candidate_value": "810.55",
+      "archive_value": "810.5",
+      "source_url": "https://cmwssb.tn.gov.in/statistics/veeranam%2019.htm",
+      "resolution": "kept existing candidate value; review source conflict"
+    },
+    {
+      "date": "2019-11-07",
+      "candidate_value": "1187.71",
+      "archive_value": "1044.04",
+      "source_url": "https://cmwssb.tn.gov.in/statistics/veeranam%2019.htm",
+      "resolution": "kept existing candidate value; review source conflict"
+    },
+    {
+      "date": "2020-02-13",
+      "candidate_value": "1387.24",
+      "archive_value": "1392.1",
+      "source_url": "https://cmwssb.tn.gov.in/statistics/veeranam%2020.htm",
+      "resolution": "kept existing candidate value; review source conflict"
+    },
+    {
+      "date": "2020-06-04",
+      "candidate_value": "252.0",
+      "archive_value": "252.8",
+      "source_url": "https://cmwssb.tn.gov.in/statistics/veeranam%2020.htm",
+      "resolution": "kept existing candidate value; review source conflict"
+    },
+    {
+      "date": "2020-07-29",
+      "candidate_value": "195.4",
+      "archive_value": "1465.0",
+      "source_url": "https://cmwssb.tn.gov.in/statistics/veeranam%2020.htm",
+      "resolution": "kept existing candidate value; review source conflict"
+    },
+    {
+      "date": "2020-08-28",
+      "candidate_value": "1176.83",
+      "archive_value": "1126.83",
+      "source_url": "https://cmwssb.tn.gov.in/statistics/veeranam%2020.htm",
+      "resolution": "kept existing candidate value; review source conflict"
+    },
+    {
+      "date": "2021-02-04",
+      "candidate_value": "552.0",
+      "archive_value": "552.92",
+      "source_url": "https://cmwssb.tn.gov.in/statistics/veeranam%2021.htm",
+      "resolution": "kept existing candidate value; review source conflict"
+    },
+    {
+      "date": "2021-09-07",
+      "candidate_value": "1355.75",
+      "archive_value": "1355.65",
+      "source_url": "https://cmwssb.tn.gov.in/statistics/veeranam%2021.htm",
+      "resolution": "kept existing candidate value; review source conflict"
+    },
+    {
+      "date": "2021-12-06",
+      "candidate_value": "892.4",
+      "archive_value": "892.2",
+      "source_url": "https://cmwssb.tn.gov.in/statistics/veeranam%2021.htm",
+      "resolution": "kept existing candidate value; review source conflict"
+    },
+    {
+      "date": "2022-02-04",
+      "candidate_value": "902.45",
+      "archive_value": "902.95",
+      "source_url": "https://cmwssb.tn.gov.in/statistics/veeranam%2022.htm",
+      "resolution": "kept existing candidate value; review source conflict"
+    },
+    {
+      "date": "2022-03-01",
+      "candidate_value": "484.2",
+      "archive_value": "482.4",
+      "source_url": "https://cmwssb.tn.gov.in/statistics/veeranam%2022.htm",
+      "resolution": "kept existing candidate value; review source conflict"
+    },
+    {
+      "date": "2022-03-31",
+      "candidate_value": "498.4",
+      "archive_value": "498.8",
+      "source_url": "https://cmwssb.tn.gov.in/statistics/veeranam%2022.htm",
+      "resolution": "kept existing candidate value; review source conflict"
+    },
+    {
+      "date": "2022-05-30",
+      "candidate_value": "375.8",
+      "archive_value": "166.25",
+      "source_url": "https://cmwssb.tn.gov.in/statistics/veeranam%2022.htm",
+      "resolution": "kept existing candidate value; review source conflict"
+    },
+    {
+      "date": "2022-06-04",
+      "candidate_value": "166.25",
+      "archive_value": "136.5",
+      "source_url": "https://cmwssb.tn.gov.in/statistics/veeranam%2022.htm",
+      "resolution": "kept existing candidate value; review source conflict"
+    },
+    {
+      "date": "2022-06-24",
+      "candidate_value": "136.5",
+      "archive_value": "269.2",
+      "source_url": "https://cmwssb.tn.gov.in/statistics/veeranam%2022.htm",
+      "resolution": "kept existing candidate value; review source conflict"
+    },
+    {
+      "date": "2022-06-29",
+      "candidate_value": "351.24",
+      "archive_value": "351.2",
+      "source_url": "https://cmwssb.tn.gov.in/statistics/veeranam%2022.htm",
+      "resolution": "kept existing candidate value; review source conflict"
+    },
+    {
+      "date": "2022-08-20",
+      "candidate_value": "98.23",
+      "archive_value": "1465.0",
+      "source_url": "https://cmwssb.tn.gov.in/statistics/veeranam%2022.htm",
+      "resolution": "kept existing candidate value; review source conflict"
+    },
+    {
+      "date": "2022-10-07",
+      "candidate_value": "1465.0",
+      "archive_value": "1209.62",
+      "source_url": "https://cmwssb.tn.gov.in/statistics/veeranam%2022.htm",
+      "resolution": "kept existing candidate value; review source conflict"
+    },
+    {
+      "date": "2022-12-07",
+      "candidate_value": "1051.35",
+      "archive_value": "1221.8",
+      "source_url": "https://cmwssb.tn.gov.in/statistics/veeranam%2022.htm",
+      "resolution": "kept existing candidate value; review source conflict"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+reservoir,valid_up_to_mcft,model,rmse,bias,low_storage_bias,n_matched,rmse_power_law,rmse_offset_power_law,rmse_gp
+poondi,,Gaussian Process,419.1,-4.2,19.9,77,414.5,414.5,419.1
+cholavaram,,Offset power-law,136.9,-12.9,14.5,85,134.7,136.9,144.6
+puzhal,,Offset power-law,405.0,1.1,11.2,84,402.8,405.0,440.7
+chembarambakkam,,Offset power-law,486.9,4.5,138.0,73,474.0,486.9,506.6
+veeranam,600,Power-law,126.9,3.0,82.1,22,126.9,130.1,131.5

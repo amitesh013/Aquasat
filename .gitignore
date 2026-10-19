@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.streamlit/secrets.toml
+*.log
+aquasat.sqlite3
+aquasat.sqlite3-shm
+aquasat.sqlite3-wal
+imd_rainfall_0p25_*.nc

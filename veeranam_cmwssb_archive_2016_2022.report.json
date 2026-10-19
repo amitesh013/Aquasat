@@ -1,0 +1,76 @@
+{
+  "years_requested": [
+    2016,
+    2017,
+    2018,
+    2019,
+    2020,
+    2021,
+    2022
+  ],
+  "rows_written": 2191,
+  "per_year": {
+    "2016": {
+      "date_rows": 366,
+      "accepted": 366,
+      "missing_storage": 0,
+      "invalid_rows": [],
+      "duplicate_rows": []
+    },
+    "2017": {
+      "date_rows": 337,
+      "accepted": 336,
+      "missing_storage": 1,
+      "invalid_rows": [],
+      "duplicate_rows": []
+    },
+    "2018": {
+      "date_rows": 365,
+      "accepted": 31,
+      "missing_storage": 334,
+      "invalid_rows": [],
+      "duplicate_rows": []
+    },
+    "2019": {
+      "date_rows": 365,
+      "accepted": 365,
+      "missing_storage": 0,
+      "invalid_rows": [],
+      "duplicate_rows": []
+    },
+    "2020": {
+      "date_rows": 366,
+      "accepted": 364,
+      "missing_storage": 0,
+      "invalid_rows": [],
+      "duplicate_rows": [
+        {
+          "date": "2020-11-08",
+          "first_value": 364.32,
+          "later_value": 423.36
+        },
+        {
+          "date": "2020-12-08",
+          "first_value": 870.73,
+          "later_value": 913.7
+        }
+      ]
+    },
+    "2021": {
+      "date_rows": 364,
+      "accepted": 364,
+      "missing_storage": 0,
+      "invalid_rows": [],
+      "duplicate_rows": []
+    },
+    "2022": {
+      "date_rows": 365,
+      "accepted": 365,
+      "missing_storage": 0,
+      "invalid_rows": [],
+      "duplicate_rows": []
+    }
+  },
+  "page_failures": [],
+  "dry_run": false
+}

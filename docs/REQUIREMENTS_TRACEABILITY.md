@@ -1,0 +1,23 @@
+# Requirements traceability
+
+Status reflects code and data in the supplied ZIP plus the scraper/tests added in this copy.
+
+| Requirement | Implementation | Status | Evidence / test |
+|---|---|---|---|
+| Sentinel-2 NDWI/MNDWI area extraction and storage estimation | `gee_extract_v3_threshold_sweep.js`, `build_sentinel2_threshold_storage.py`, `build_clear95_dashboard.py` | Active early-selected per-lake threshold rules and prior-only isotonic estimates connected to dashboard | v3 scenes require >=95% clear area and >=99.5% footprint; water-area rules selected on early dates; later 20% holdout scores reported separately; disputed dates excluded |
+| Sentinel-1 fallback | `gee_extract_sentinel1_v3_candidates.js`, `build_sentinel1_fallback.py`, `app.py` | Active only as a lagged feature to live XGBoost when same-lake/date S2 is absent; does not alter dashboard satellite cards | Dual-pol VV/VH candidate thresholds, v3/coverage gates, early-date selection, later holdout, prior-only storage calibration, S2-first same-date merge; forecast backtest showed no broad gain |
+| Provenance, cloud, coverage quality | satellite CSV columns and `prepare_data.py` | Partial | schemas in CSV inventory |
+| Reservoir-specific area/storage calibration | `build_sentinel2_threshold_storage.py`, `build_clear95_dashboard.py` | Active threshold-selected isotonic calibration uses only earlier exact-date matches | Later-date holdout metrics are reported separately from the early threshold-selection period; this is satellite storage calibration, not forecasting |
+| Chronological validation and low-storage reporting | `metrics.csv`, `build_clear95_dashboard.py`, `app.py` | Active and recorded | Later 20% holdout RMSE and low-storage pair counts are shown; low-storage scoring is absent for most lakes because holdout drought samples are sparse |
+| Prophet forecast comparison | `backtest_15day_forecasts.py`, `forcast_baseline.py` | 15-day Prophet comparison completed as research only; not used by live app | User ran Prophet 1.4.0 on the same 344 rolling-origin pairs from 2019–2024. Pooled RMSE: Prophet 675.6 mcft, XGBoost 221.7, XGBoost with satellite lag 221.5, seasonal/damped-trend 217.1. Prophet run did not include rainfall and performed substantially worse. |
+| XGBoost forecast | `generate_live_xgboost_forecast.py`, `xgboost_forecasting.py`, `forcast_reservoirs.py` | Active 15-day forecast; S2-first/S1-fallback satellite lag is used by user choice despite mixed/no-broad-gain backtest results | Forecast input uses non-disputed official history and prior calibrated satellite estimates; candidate backtest covers 444 forecast/actual pairs |
+| Historical rainfall comparison | `build_imd_rainfall.py`, `backtest_2019_rainfall.py`, `app.py` | Research-only 2019 and 2019–2024 comparisons; not connected to the live forecast | IMD 0.25° nearest-cell proxy; strictly prior 7/30/90-day totals; 344 exact-date 15-day targets in 2019–2024; pooled RMSE 221.49 vs 225.84 mcft and normalized RMSE 10.46% vs 10.48%; mixed annual/lake results |
+| Seasonal/damped trend baseline | `forcast_reservoirs.py --model seasonal-baseline` | Retained as an optional comparison/fallback | Explicitly selected; not the default live forecast |
+| Fair common evaluation and metadata | `backtest_15day_forecasts.py`, `generate_live_xgboost_forecast.py`, `reservoir_forecasts.csv` | Common rolling-origin results recorded; active output includes model/origin/horizon, satellite source/date/age, generation time, RMSE, and pair count | 444 user-run forecast/actual pairs; the empirical display band is approximate and not a calibrated probability interval |
+| Dashboard | `app.py` | Implemented; UI after latest data refresh awaits user confirmation | Loads official history, active threshold-selected clear95 S2 estimates, later-holdout metrics, and the 15-day XGBoost forecast with source/model metadata |
+| Freshness and quality warnings | `app.py` | Checks observation age and reloads forecast when the stored file changes; forecast source and origin are disclosed | code inspection; interactive UI remains unverified |
+| CSV inventory and cleanup record | `docs/CSV_INVENTORY.md`, `docs/CSV_CLEANUP_LOG.md` | Implemented for archive inventory; no files removed | docs |
+| Safe CMWSSB current-storage scraper | `scrape_cmwssb.py` | Implemented with offline parser tests; live form submission unverified | `python -m unittest discover -s tests -v` |
+| Manual-value protection and date normalization | `scrape_cmwssb.py` | Implemented for wide CSV schema | merge tests cover preserving conflicts and filling blank fields |
+
+No status is marked complete solely because it appears in the original requirements.

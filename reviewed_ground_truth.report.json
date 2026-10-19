@@ -1,0 +1,110 @@
+{
+  "requested_dates": [
+    "2019-11-27",
+    "2022-12-01",
+    "2026-04-24"
+  ],
+  "retrieved_dates": [
+    "2019-11-27",
+    "2022-12-01",
+    "2026-04-24"
+  ],
+  "rejected": [],
+  "missing_values_by_date": {
+    "2019-11-27": [],
+    "2022-12-01": [],
+    "2026-04-24": []
+  },
+  "accepted_values_by_reservoir": {
+    "poondi": 3,
+    "cholavaram": 3,
+    "puzhal": 3,
+    "chembarambakkam": 3,
+    "veeranam": 1
+  },
+  "conflicts_for_review": [],
+  "rows_added": 3,
+  "values_added": 13,
+  "existing_skipped": 0,
+  "auto_filled_values": [
+    {
+      "date": "2019-11-27",
+      "reservoir": "poondi",
+      "value": 967.0,
+      "source": "CMWSSB lake-level page"
+    },
+    {
+      "date": "2019-11-27",
+      "reservoir": "cholavaram",
+      "value": 99.0,
+      "source": "CMWSSB lake-level page"
+    },
+    {
+      "date": "2019-11-27",
+      "reservoir": "puzhal",
+      "value": 1528.0,
+      "source": "CMWSSB lake-level page"
+    },
+    {
+      "date": "2019-11-27",
+      "reservoir": "chembarambakkam",
+      "value": 651.0,
+      "source": "CMWSSB lake-level page"
+    },
+    {
+      "date": "2022-12-01",
+      "reservoir": "poondi",
+      "value": 2376.0,
+      "source": "CMWSSB lake-level page"
+    },
+    {
+      "date": "2022-12-01",
+      "reservoir": "cholavaram",
+      "value": 526.0,
+      "source": "CMWSSB lake-level page"
+    },
+    {
+      "date": "2022-12-01",
+      "reservoir": "puzhal",
+      "value": 2459.0,
+      "source": "CMWSSB lake-level page"
+    },
+    {
+      "date": "2022-12-01",
+      "reservoir": "chembarambakkam",
+      "value": 2455.0,
+      "source": "CMWSSB lake-level page"
+    },
+    {
+      "date": "2026-04-24",
+      "reservoir": "poondi",
+      "value": 2116.0,
+      "source": "CMWSSB lake-level page"
+    },
+    {
+      "date": "2026-04-24",
+      "reservoir": "cholavaram",
+      "value": 495.0,
+      "source": "CMWSSB lake-level page"
+    },
+    {
+      "date": "2026-04-24",
+      "reservoir": "puzhal",
+      "value": 2080.0,
+      "source": "CMWSSB lake-level page"
+    },
+    {
+      "date": "2026-04-24",
+      "reservoir": "chembarambakkam",
+      "value": 2952.0,
+      "source": "CMWSSB lake-level page"
+    },
+    {
+      "date": "2026-04-24",
+      "reservoir": "veeranam",
+      "value": 1070.83,
+      "source": "CMWSSB lake-level page"
+    }
+  ],
+  "dry_run": false
+}
