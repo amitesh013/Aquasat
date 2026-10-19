@@ -58,13 +58,7 @@ function App() {
   const selectedReservoir = reservoirs.find((lake) => lake.key === selected) ?? reservoirs[0];
   const selectedHistory = useMemo(() => (data?.history ?? []).filter((row) => row.reservoir === selected), [data, selected]);
   const selectedForecast = useMemo(() => (data?.forecasts ?? []).filter((row) => row.reservoir === selected), [data, selected]);
-  const current = latest(selectedHistory.filter((row) => row.official_mcft != null));
-  const satellite = latest(selectedHistory.filter((row) => row.sat_estimate_mcft != null));
-  const forecastEnd = latest(selectedForecast);
   const metric = (data?.metrics?.[selected] ?? {}) as MetricRow;
-  const selectedForecastPoint = number(forecastEnd?.yhat);
-  const levelPct = current?.official_mcft == null ? null : current.official_mcft / selectedReservoir.capacity * 100;
-  const alertLow = levelPct != null && levelPct < 20;
 
   const overview = page === "overview";
   const title = overview ? "Chennai reservoir storage" : page === "reservoir" ? "Reservoir detail" : page === "forecast" ? "15-day outlook" : page === "validation" ? "Model validation" : "How AquaSat works";

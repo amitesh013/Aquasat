@@ -17,5 +17,16 @@ export async function getDashboard(signal?: AbortSignal): Promise<DashboardData>
     }
     throw new Error(message);
   }
-  return response.json() as Promise<DashboardData>;
+  const payload: unknown = await response.json();
+  if (typeof payload !== "object" || payload === null) {
+    throw new Error("Dashboard API returned an invalid response.");
+  }
+  const dashboard = payload as Partial<DashboardData>;
+  if (!Array.isArray(dashboard.history) || !Array.isArray(dashboard.forecasts) ||
+      typeof dashboard.metrics !== "object" || dashboard.metrics === null ||
+      typeof dashboard.data_status !== "object" || dashboard.data_status === null ||
+      typeof dashboard.data_status.database !== "string") {
+    throw new Error("Dashboard API response is missing history, forecasts, metrics, or database status.");
+  }
+  return dashboard as DashboardData;
 }

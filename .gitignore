@@ -9,3 +9,8 @@ aquasat.sqlite3
 aquasat.sqlite3-shm
 aquasat.sqlite3-wal
 imd_rainfall_0p25_*.nc
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+.env.*.local
+frontend/*.tsbuildinfo
