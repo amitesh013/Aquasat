@@ -7,3 +7,6 @@ xgboost
 fastapi
 uvicorn
 requests
+sqlalchemy
+psycopg[binary]
+alembic

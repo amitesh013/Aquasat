@@ -11,9 +11,12 @@ from aquasat_database import sync_csv_outputs
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--force", action="store_true", help="re-import even if source CSVs are unchanged")
-    parser.add_argument("--database", help="optional SQLite path; defaults to aquasat.sqlite3 here")
+    parser.add_argument(
+        "--database-url",
+        help="optional SQLAlchemy URL; defaults to DATABASE_URL or local SQLite",
+    )
     args = parser.parse_args()
-    result = sync_csv_outputs(db_path=args.database, force=args.force)
+    result = sync_csv_outputs(database_url=args.database_url, force=args.force)
     print(json.dumps(result, indent=2))
     return 0
 

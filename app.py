@@ -487,8 +487,8 @@ try:
     else:
         F = pd.DataFrame(columns=["ds", "reservoir", "key", "yhat", "yhat_lower", "yhat_upper"])
     M = core_data["metrics"]
-    data_source_label = "FastAPI + SQLite"
     data_status = core_data["data_status"]
+    data_source_label = f"FastAPI + {data_status.get('database', 'database')}"
 except (requests.RequestException, ValueError, KeyError, TypeError) as e:
     core_data_error = str(e)
     try:
@@ -568,8 +568,8 @@ st.session_state.setdefault("threshold", 20.0)
 with st.sidebar:
     st.title("AquaSat")
     st.caption("Satellite-based storage estimates for Chennai's reservoirs")
-    if data_source_label == "FastAPI + SQLite":
-        st.caption("Data service: FastAPI · SQLite")
+    if data_source_label.startswith("FastAPI +"):
+        st.caption(f"Data service: FastAPI · {data_status.get('database', 'database')}")
         if data_status.get("last_synced_at_utc"):
             st.caption(f"Database synced: {data_status['last_synced_at_utc']}")
         if st.button("Refresh from current CSV files", width="stretch"):

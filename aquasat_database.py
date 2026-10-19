@@ -1,8 +1,8 @@
-"""SQLite snapshot store for AquaSat's validated dashboard CSV outputs.
+"""Portable SQLAlchemy storage for AquaSat dashboard data.
 
-The existing processing scripts continue to produce CSV files. This module
-validates those files and atomically syncs the dashboard history, forecast,
-and metrics into SQLite so the Streamlit app and REST API can share one store.
+Neon PostgreSQL is selected with DATABASE_URL. Local development uses SQLite
+when DATABASE_URL is not set. Current, reviewed dashboard CSVs are imported
+atomically and remain reproducible source artifacts during migration.
 """
 
 from __future__ import annotations
@@ -11,14 +11,26 @@ import csv
 import hashlib
 import json
 import os
-import sqlite3
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy import (
+    Column, Date, Float, ForeignKey, Index, Integer, MetaData, String, Table, Text,
+    create_engine, delete, func, insert, inspect, select,
+)
+from sqlalchemy.engine import Engine
+
 
 PROJECT_DIR = Path(__file__).resolve().parent
-DB_PATH = Path(os.environ.get("AQUASAT_DB_PATH", PROJECT_DIR / "aquasat.sqlite3"))
+RESERVOIRS = {
+    "poondi": ("Poondi", 3231),
+    "cholavaram": ("Cholavaram", 1081),
+    "puzhal": ("Puzhal (Redhills)", 3300),
+    "chembarambakkam": ("Chembarambakkam", 3645),
+    "veeranam": ("Veeranam", 1465),
+}
 CORE_FILES = {
     "history": "dashboard_data.csv",
     "forecast": "reservoir_forecasts.csv",
@@ -38,61 +50,105 @@ NUMBER_COLUMNS = {
 }
 INTEGER_COLUMNS = {"horizon_days", "backtest_pairs", "n_matched", "cv_splits", "low_storage_pairs"}
 
+metadata = MetaData()
 
-def database_path() -> Path:
-    """Return the configured database path, resolving relative overrides locally."""
-    configured = Path(os.environ.get("AQUASAT_DB_PATH", DB_PATH))
-    if not configured.is_absolute():
-        configured = PROJECT_DIR / configured
+reservoir_table = Table(
+    "reservoirs", metadata,
+    Column("slug", String(64), primary_key=True),
+    Column("display_name", String(120), nullable=False),
+    Column("capacity_mcft", Integer, nullable=False),
+)
+
+observation_table = Table(
+    "storage_observations", metadata,
+    Column("reservoir", String(64), ForeignKey("reservoirs.slug"), primary_key=True),
+    Column("observation_date", Date, primary_key=True),
+    Column("source", String(32), primary_key=True),
+    Column("storage_mcft", Float),
+    Column("metadata_json", Text),
+)
+Index("ix_storage_observations_date_source", observation_table.c.observation_date, observation_table.c.source)
+
+forecast_table = Table(
+    "forecasts", metadata,
+    Column("reservoir", String(64), ForeignKey("reservoirs.slug"), primary_key=True),
+    Column("forecast_date", Date, primary_key=True),
+    Column("model", String(100), primary_key=True),
+    Column("origin_date", Date),
+    Column("horizon_days", Integer),
+    Column("yhat", Float),
+    Column("yhat_lower", Float),
+    Column("yhat_upper", Float),
+    Column("generated_at_utc", String(40)),
+    Column("payload_json", Text, nullable=False),
+)
+Index("ix_forecasts_date", forecast_table.c.forecast_date)
+
+metric_table = Table(
+    "calibration_metrics", metadata,
+    Column("reservoir", String(64), ForeignKey("reservoirs.slug"), primary_key=True),
+    Column("payload_json", Text, nullable=False),
+)
+
+source_sync_table = Table(
+    "source_sync", metadata,
+    Column("source_file", String(120), primary_key=True),
+    Column("sha256", String(64), nullable=False),
+    Column("row_count", Integer, nullable=False),
+    Column("synced_at_utc", String(40), nullable=False),
+)
+
+
+def _normalize_database_url(url: str | None = None) -> str:
+    configured = (url or os.environ.get("DATABASE_URL") or "").strip()
+    if not configured:
+        fallback = Path(os.environ.get("AQUASAT_DB_PATH", PROJECT_DIR / "aquasat.sqlite3"))
+        if not fallback.is_absolute():
+            fallback = PROJECT_DIR / fallback
+        return f"sqlite:///{fallback.as_posix()}"
+    if configured.startswith("postgres://"):
+        configured = "postgresql+psycopg://" + configured[len("postgres://"):]
+    elif configured.startswith("postgresql://"):
+        configured = "postgresql+psycopg://" + configured[len("postgresql://"):]
     return configured
 
 
-def connect(db_path: str | Path | None = None) -> sqlite3.Connection:
-    path = Path(db_path) if db_path is not None else database_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(path, timeout=15)
-    connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA foreign_keys = ON")
-    connection.execute("PRAGMA journal_mode = WAL")
-    return connection
+@lru_cache(maxsize=4)
+def _engine_for(url: str) -> Engine:
+    options: dict[str, Any] = {"pool_pre_ping": True}
+    if url.startswith("sqlite:"):
+        options["connect_args"] = {"check_same_thread": False, "timeout": 20}
+    return create_engine(url, **options)
 
 
-def initialize_database(db_path: str | Path | None = None) -> None:
-    with connect(db_path) as connection:
-        connection.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS observations (
-                reservoir TEXT NOT NULL,
-                observation_date TEXT NOT NULL,
-                sat_estimate_mcft REAL,
-                official_mcft REAL,
-                PRIMARY KEY (reservoir, observation_date)
-            );
-            CREATE INDEX IF NOT EXISTS idx_observations_reservoir_date
-                ON observations (reservoir, observation_date);
+def get_engine(database_url: str | None = None) -> Engine:
+    return _engine_for(_normalize_database_url(database_url))
 
-            CREATE TABLE IF NOT EXISTS forecasts (
-                reservoir TEXT NOT NULL,
-                forecast_date TEXT NOT NULL,
-                payload_json TEXT NOT NULL,
-                PRIMARY KEY (reservoir, forecast_date)
-            );
-            CREATE INDEX IF NOT EXISTS idx_forecasts_reservoir_date
-                ON forecasts (reservoir, forecast_date);
 
-            CREATE TABLE IF NOT EXISTS metrics (
-                reservoir TEXT PRIMARY KEY,
-                payload_json TEXT NOT NULL
-            );
+def database_backend(database_url: str | None = None) -> str:
+    url = _normalize_database_url(database_url)
+    return "PostgreSQL (Neon or compatible)" if url.startswith("postgresql+") else "SQLite (local development)"
 
-            CREATE TABLE IF NOT EXISTS source_sync (
-                source_file TEXT PRIMARY KEY,
-                sha256 TEXT NOT NULL,
-                row_count INTEGER NOT NULL,
-                synced_at_utc TEXT NOT NULL
-            );
-            """
+
+def initialize_database(database_url: str | None = None) -> None:
+    engine = get_engine(database_url)
+    url = _normalize_database_url(database_url)
+    if url.startswith("sqlite:"):
+        metadata.create_all(engine)
+    elif not inspect(engine).has_table("reservoirs"):
+        raise RuntimeError(
+            "The PostgreSQL schema is not initialized. Set DATABASE_URL and run "
+            "'alembic upgrade head' before starting AquaSat."
         )
+    with engine.begin() as connection:
+        for slug, (display_name, capacity_mcft) in RESERVOIRS.items():
+            exists = connection.execute(
+                select(reservoir_table.c.slug).where(reservoir_table.c.slug == slug)
+            ).first()
+            if exists is None:
+                connection.execute(insert(reservoir_table).values(
+                    slug=slug, display_name=display_name, capacity_mcft=capacity_mcft
+                ))
 
 
 def _sha256(path: Path) -> str:
@@ -120,99 +176,113 @@ def _read_csv(path: Path, dataset: str) -> list[dict[str, str]]:
 def _clean_number(value: Any, column: str) -> int | float | None:
     if value is None or str(value).strip() == "":
         return None
-    number = float(value)
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Expected a number in column {column}; found {value!r}") from exc
     if number != number or number in (float("inf"), float("-inf")):
         return None
     return int(number) if column in INTEGER_COLUMNS else number
 
 
-def _iso_date(value: Any, filename: str, column: str) -> str:
+def _iso_date(value: Any, filename: str, column: str) -> date:
     raw = str(value or "").strip()
     try:
-        return datetime.fromisoformat(raw.replace("Z", "+00:00")).date().isoformat()
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).date()
     except ValueError as exc:
         raise ValueError(f"Invalid {column} value {raw!r} in {filename}") from exc
 
 
 def _clean_record(record: dict[str, str]) -> dict[str, Any]:
-    cleaned: dict[str, Any] = {}
-    for key, value in record.items():
-        if key in NUMBER_COLUMNS:
-            cleaned[key] = _clean_number(value, key)
-        else:
-            cleaned[key] = value if value not in (None, "") else None
-    return cleaned
-
-
-def sync_csv_outputs(db_path: str | Path | None = None, force: bool = False) -> dict[str, Any]:
-    """Validate and sync the core CSV outputs as one SQLite transaction.
-
-    CSVs remain the pipeline's source artifacts during this migration. A bad
-    or incomplete input never partially replaces the last good database copy.
-    """
-    initialize_database(db_path)
-    paths = {name: PROJECT_DIR / filename for name, filename in CORE_FILES.items()}
-    fingerprints = {
-        name: (_sha256(path) if path.is_file() else None)
-        for name, path in paths.items()
+    return {
+        key: _clean_number(value, key) if key in NUMBER_COLUMNS
+        else (value if value not in (None, "") else None)
+        for key, value in record.items()
     }
 
-    with connect(db_path) as connection:
+
+def _source_status(connection) -> list[dict[str, Any]]:
+    rows = connection.execute(
+        select(source_sync_table).order_by(source_sync_table.c.source_file)
+    ).mappings()
+    return [dict(row) for row in rows]
+
+
+def sync_csv_outputs(database_url: str | None = None, force: bool = False) -> dict[str, Any]:
+    """Validate the current output CSVs and atomically replace their DB snapshot."""
+    initialize_database(database_url)
+    engine = get_engine(database_url)
+    paths = {name: PROJECT_DIR / filename for name, filename in CORE_FILES.items()}
+    fingerprints = {name: (_sha256(path) if path.is_file() else None) for name, path in paths.items()}
+
+    with engine.connect() as connection:
         old = {
             row["source_file"]: row["sha256"]
-            for row in connection.execute("SELECT source_file, sha256 FROM source_sync")
+            for row in connection.execute(select(source_sync_table)).mappings()
         }
-        expected_names = {path.name for path in paths.values() if path.exists()}
-        if not force and expected_names == set(old) and all(
+        expected = {path.name for path in paths.values() if path.exists()}
+        if not force and expected == set(old) and all(
             old.get(path.name) == fingerprints[name]
-            for name, path in paths.items()
-            if path.exists()
+            for name, path in paths.items() if path.exists()
         ):
             return {
                 "updated": False,
-                "database": str(database_path() if db_path is None else Path(db_path)),
+                "backend": database_backend(database_url),
                 "sources": _source_status(connection),
             }
 
-    # Parse and validate before opening the replacement transaction.
     history_rows = _read_csv(paths["history"], "history")
     forecast_rows = _read_csv(paths["forecast"], "forecast")
     metric_rows = _read_csv(paths["metrics"], "metrics")
 
-    observations: dict[tuple[str, str], tuple[str, str, float | None, float | None]] = {}
+    observations: dict[tuple[str, date, str], dict[str, Any]] = {}
     for row in history_rows:
-        reservoir = (row.get("reservoir") or "").strip().lower()
-        if not reservoir:
-            raise ValueError("dashboard_data.csv contains a blank reservoir name")
-        date = _iso_date(row.get("date"), "dashboard_data.csv", "date")
-        observations[(reservoir, date)] = (
-            reservoir, date,
-            _clean_number(row.get("sat_estimate_mcft"), "sat_estimate_mcft"),
-            _clean_number(row.get("official_mcft"), "official_mcft"),
-        )
+        lake = (row.get("reservoir") or "").strip().lower()
+        if lake not in RESERVOIRS:
+            raise ValueError(f"Unknown reservoir in dashboard_data.csv: {lake!r}")
+        observed_on = _iso_date(row.get("date"), "dashboard_data.csv", "date")
+        for source_name, column in (("cmwssb", "official_mcft"), ("sentinel2", "sat_estimate_mcft")):
+            value = _clean_number(row.get(column), column)
+            if value is not None:
+                observations[(lake, observed_on, source_name)] = {
+                    "reservoir": lake,
+                    "observation_date": observed_on,
+                    "source": source_name,
+                    "storage_mcft": value,
+                    "metadata_json": None,
+                }
 
-    forecasts: dict[tuple[str, str], tuple[str, str, str]] = {}
+    forecasts: dict[tuple[str, date, str], dict[str, Any]] = {}
     for row in forecast_rows:
-        reservoir = (row.get("reservoir") or "").strip().lower()
-        if not reservoir:
-            raise ValueError("reservoir_forecasts.csv contains a blank reservoir name")
-        forecast_date = _iso_date(row.get("ds"), "reservoir_forecasts.csv", "ds")
+        lake = (row.get("reservoir") or "").strip().lower()
+        if lake not in RESERVOIRS:
+            raise ValueError(f"Unknown reservoir in reservoir_forecasts.csv: {lake!r}")
+        forecast_on = _iso_date(row.get("ds"), "reservoir_forecasts.csv", "ds")
         cleaned = _clean_record(row)
-        cleaned["reservoir"] = reservoir
-        cleaned["ds"] = forecast_date
-        forecasts[(reservoir, forecast_date)] = (
-            reservoir, forecast_date,
-            json.dumps(cleaned, allow_nan=False, separators=(",", ":")),
-        )
+        model = str(cleaned.get("model") or "unknown")
+        cleaned["reservoir"] = lake
+        cleaned["ds"] = forecast_on.isoformat()
+        origin = cleaned.get("forecast_origin")
+        forecasts[(lake, forecast_on, model)] = {
+            "reservoir": lake,
+            "forecast_date": forecast_on,
+            "model": model,
+            "origin_date": _iso_date(origin, "reservoir_forecasts.csv", "forecast_origin") if origin else None,
+            "horizon_days": cleaned.get("horizon_days"),
+            "yhat": cleaned.get("yhat"),
+            "yhat_lower": cleaned.get("yhat_lower"),
+            "yhat_upper": cleaned.get("yhat_upper"),
+            "generated_at_utc": cleaned.get("generated_at_utc"),
+            "payload_json": json.dumps(cleaned, allow_nan=False, separators=(",", ":")),
+        }
 
-    metrics: dict[str, str] = {}
+    metrics: dict[str, dict[str, str]] = {}
     for row in metric_rows:
-        reservoir = (row.get("reservoir") or "").strip().lower()
-        if not reservoir:
-            continue
-        cleaned = _clean_record(row)
-        cleaned["reservoir"] = reservoir
-        metrics[reservoir] = json.dumps(cleaned, allow_nan=False, separators=(",", ":"))
+        lake = (row.get("reservoir") or "").strip().lower()
+        if lake in RESERVOIRS:
+            cleaned = _clean_record(row)
+            cleaned["reservoir"] = lake
+            metrics[lake] = {"reservoir": lake, "payload_json": json.dumps(cleaned, allow_nan=False, separators=(",", ":"))}
 
     synced_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     row_counts = {
@@ -220,61 +290,75 @@ def sync_csv_outputs(db_path: str | Path | None = None, force: bool = False) -> 
         "reservoir_forecasts.csv": len(forecasts),
         "metrics.csv": len(metrics),
     }
-    with connect(db_path) as connection:
-        connection.execute("BEGIN IMMEDIATE")
-        connection.execute("DELETE FROM observations")
-        connection.execute("DELETE FROM forecasts")
-        connection.execute("DELETE FROM metrics")
-        connection.executemany(
-            "INSERT INTO observations VALUES (?, ?, ?, ?)", observations.values()
-        )
-        connection.executemany(
-            "INSERT INTO forecasts VALUES (?, ?, ?)", forecasts.values()
-        )
-        connection.executemany(
-            "INSERT INTO metrics VALUES (?, ?)", metrics.items()
-        )
-        for name, path in paths.items():
-            if path.exists():
-                connection.execute(
-                    "INSERT INTO source_sync (source_file, sha256, row_count, synced_at_utc) "
-                    "VALUES (?, ?, ?, ?) ON CONFLICT(source_file) DO UPDATE SET "
-                    "sha256=excluded.sha256, row_count=excluded.row_count, synced_at_utc=excluded.synced_at_utc",
-                    (path.name, fingerprints[name], row_counts[path.name], synced_at),
-                )
-            else:
-                connection.execute("DELETE FROM source_sync WHERE source_file = ?", (path.name,))
-        connection.commit()
+    with engine.begin() as connection:
+        connection.execute(delete(observation_table))
+        connection.execute(delete(forecast_table))
+        connection.execute(delete(metric_table))
+        connection.execute(delete(source_sync_table))
+        if observations:
+            connection.execute(insert(observation_table), list(observations.values()))
+        if forecasts:
+            connection.execute(insert(forecast_table), list(forecasts.values()))
+        if metrics:
+            connection.execute(insert(metric_table), list(metrics.values()))
+        sync_rows = [
+            {
+                "source_file": path.name,
+                "sha256": fingerprints[name],
+                "row_count": row_counts[path.name],
+                "synced_at_utc": synced_at,
+            }
+            for name, path in paths.items() if path.is_file()
+        ]
+        if sync_rows:
+            connection.execute(insert(source_sync_table), sync_rows)
 
     return {
         "updated": True,
-        "database": str(database_path() if db_path is None else Path(db_path)),
+        "backend": database_backend(database_url),
         "row_counts": row_counts,
         "synced_at_utc": synced_at,
     }
 
 
-def _source_status(connection: sqlite3.Connection) -> list[dict[str, Any]]:
-    return [dict(row) for row in connection.execute(
-        "SELECT source_file, row_count, synced_at_utc FROM source_sync ORDER BY source_file"
-    )]
+def _history_records(connection, lake: str | None = None,
+                     start_date: date | None = None, end_date: date | None = None) -> list[dict[str, Any]]:
+    query = select(observation_table).order_by(
+        observation_table.c.observation_date, observation_table.c.reservoir
+    )
+    if lake:
+        query = query.where(observation_table.c.reservoir == lake)
+    if start_date:
+        query = query.where(observation_table.c.observation_date >= start_date)
+    if end_date:
+        query = query.where(observation_table.c.observation_date <= end_date)
+    result: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in connection.execute(query).mappings():
+        date_text = row["observation_date"].isoformat()
+        entry = result.setdefault((row["reservoir"], date_text), {
+            "reservoir": row["reservoir"], "date": date_text,
+            "official_mcft": None, "sat_estimate_mcft": None,
+        })
+        if row["source"] == "cmwssb":
+            entry["official_mcft"] = row["storage_mcft"]
+        elif row["source"] == "sentinel2":
+            entry["sat_estimate_mcft"] = row["storage_mcft"]
+    return list(result.values())
 
 
-def read_dashboard(db_path: str | Path | None = None) -> dict[str, Any]:
-    with connect(db_path) as connection:
-        history = [dict(row) for row in connection.execute(
-            "SELECT reservoir, observation_date AS date, sat_estimate_mcft, official_mcft "
-            "FROM observations ORDER BY observation_date, reservoir"
-        )]
+def read_dashboard(database_url: str | None = None) -> dict[str, Any]:
+    engine = get_engine(database_url)
+    with engine.connect() as connection:
+        history = _history_records(connection)
         forecasts = [
             json.loads(row["payload_json"])
-            for row in connection.execute(
-                "SELECT payload_json FROM forecasts ORDER BY forecast_date, reservoir"
-            )
+            for row in connection.execute(select(forecast_table).order_by(
+                forecast_table.c.forecast_date, forecast_table.c.reservoir
+            )).mappings()
         ]
         metrics = {
             row["reservoir"]: json.loads(row["payload_json"])
-            for row in connection.execute("SELECT reservoir, payload_json FROM metrics")
+            for row in connection.execute(select(metric_table)).mappings()
         }
         sources = _source_status(connection)
     return {
@@ -282,51 +366,49 @@ def read_dashboard(db_path: str | Path | None = None) -> dict[str, Any]:
         "forecasts": forecasts,
         "metrics": metrics,
         "data_status": {
-            "database": str(database_path() if db_path is None else Path(db_path)),
-            "last_synced_at_utc": max(
-                (source["synced_at_utc"] for source in sources), default=None
-            ),
+            "database": database_backend(database_url),
+            "last_synced_at_utc": max((s["synced_at_utc"] for s in sources), default=None),
             "sources": sources,
         },
     }
 
 
-def read_history(reservoir: str, start_date: str | None = None, end_date: str | None = None,
-                 db_path: str | Path | None = None) -> list[dict[str, Any]]:
-    query = (
-        "SELECT reservoir, observation_date AS date, sat_estimate_mcft, official_mcft "
-        "FROM observations WHERE reservoir = ?"
-    )
-    params: list[Any] = [reservoir]
-    if start_date:
-        query += " AND observation_date >= ?"
-        params.append(start_date)
-    if end_date:
-        query += " AND observation_date <= ?"
-        params.append(end_date)
-    query += " ORDER BY observation_date"
-    with connect(db_path) as connection:
-        return [dict(row) for row in connection.execute(query, params)]
+def read_history(reservoir: str, start_date: date | None = None,
+                 end_date: date | None = None, database_url: str | None = None) -> list[dict[str, Any]]:
+    with get_engine(database_url).connect() as connection:
+        return _history_records(connection, reservoir, start_date, end_date)
 
 
 def read_forecasts(reservoir: str, include_expired: bool = False,
-                   db_path: str | Path | None = None) -> list[dict[str, Any]]:
-    with connect(db_path) as connection:
-        rows = connection.execute(
-            "SELECT payload_json FROM forecasts WHERE reservoir = ? ORDER BY forecast_date",
-            (reservoir,),
-        )
-        forecasts = [json.loads(row["payload_json"]) for row in rows]
+                   database_url: str | None = None) -> list[dict[str, Any]]:
+    query = select(forecast_table.c.payload_json).where(
+        forecast_table.c.reservoir == reservoir
+    ).order_by(forecast_table.c.forecast_date)
     if not include_expired:
-        today = datetime.now().date().isoformat()
-        forecasts = [row for row in forecasts if (row.get("ds") or "") >= today]
-    return forecasts
+        query = query.where(forecast_table.c.forecast_date >= date.today())
+    with get_engine(database_url).connect() as connection:
+        return [json.loads(row[0]) for row in connection.execute(query)]
 
 
-def list_reservoirs(db_path: str | Path | None = None) -> list[dict[str, Any]]:
-    with connect(db_path) as connection:
-        rows = connection.execute(
-            "SELECT reservoir, MAX(observation_date) AS latest_observation "
-            "FROM observations GROUP BY reservoir ORDER BY reservoir"
-        )
-        return [dict(row) for row in rows]
+def list_reservoirs(database_url: str | None = None) -> list[dict[str, Any]]:
+    latest = select(
+        observation_table.c.reservoir,
+        func.max(observation_table.c.observation_date).label("latest_observation"),
+    ).group_by(observation_table.c.reservoir).subquery()
+    query = select(
+        reservoir_table.c.slug,
+        reservoir_table.c.display_name,
+        reservoir_table.c.capacity_mcft,
+        latest.c.latest_observation,
+    ).outerjoin(latest, latest.c.reservoir == reservoir_table.c.slug).order_by(
+        reservoir_table.c.display_name
+    )
+    with get_engine(database_url).connect() as connection:
+        return [
+            {
+                **dict(row),
+                "latest_observation": row["latest_observation"].isoformat()
+                if row["latest_observation"] else None,
+            }
+            for row in connection.execute(query).mappings()
+        ]

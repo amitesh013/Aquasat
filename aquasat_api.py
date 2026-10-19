@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from datetime import date
+import os
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 
 from aquasat_database import (
     list_reservoirs,
@@ -24,6 +26,21 @@ app = FastAPI(
     ),
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        origin.strip()
+        for origin in os.environ.get(
+            "AQUASAT_CORS_ORIGINS",
+            "http://localhost:5173,http://127.0.0.1:5173",
+        ).split(",")
+        if origin.strip()
+    ],
+    allow_credentials=False,
+    allow_methods=["GET"],
+    allow_headers=["Accept", "Content-Type"],
+)
+
 RESERVOIR_ALIASES = {
     "redhills": "puzhal",
     "red-hills": "puzhal",
@@ -39,7 +56,7 @@ def _slug(value: str) -> str:
 def _sync_or_503() -> dict:
     try:
         return sync_csv_outputs()
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, RuntimeError) as exc:
         raise HTTPException(status_code=503, detail=f"AquaSat data sync failed: {exc}") from exc
 
 
@@ -55,7 +72,7 @@ def health() -> dict:
             "last_synced_at_utc": dashboard["data_status"]["last_synced_at_utc"],
             "sync_updated": sync_result["updated"],
         }
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, RuntimeError) as exc:
         return {"status": "degraded", "service": "aquasat-api", "detail": str(exc)}
 
 
@@ -83,8 +100,8 @@ def reservoir_history(
     slug = _slug(reservoir)
     rows = read_history(
         slug,
-        start_date.isoformat() if start_date else None,
-        end_date.isoformat() if end_date else None,
+        start_date,
+        end_date,
     )
     if not rows:
         raise HTTPException(status_code=404, detail=f"No observations found for reservoir '{reservoir}'")
