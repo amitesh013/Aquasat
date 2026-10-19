@@ -21,9 +21,11 @@ from sqlalchemy import (
     create_engine, delete, func, insert, inspect, select,
 )
 from sqlalchemy.engine import Engine
-
+from dotenv import load_dotenv
 
 PROJECT_DIR = Path(__file__).resolve().parent
+load_dotenv(PROJECT_DIR / ".env")
+
 RESERVOIRS = {
     "poondi": ("Poondi", 3231),
     "cholavaram": ("Cholavaram", 1081),

@@ -1,7 +1,10 @@
 from alembic import context
 from sqlalchemy import engine_from_config, pool
+from dotenv import load_dotenv
 
 from aquasat_database import metadata, _normalize_database_url
+
+load_dotenv()
 
 
 config = context.config
