@@ -47,10 +47,10 @@ NUMBER_COLUMNS = {
     "sat_estimate_mcft", "official_mcft", "yhat", "yhat_lower", "yhat_upper",
     "horizon_days", "day15_prediction_mcft", "satellite_age_days",
     "backtest_rmse_mcft", "backtest_pairs", "valid_up_to_mcft", "rmse", "bias",
-    "low_storage_bias", "n_matched", "cv_splits", "low_storage_pairs",
-    "low_storage_rmse",
+    "low_storage_bias", "n_matched", "low_storage_pairs",
+    "low_storage_rmse", "rainfall_7d_mm", "rainfall_30d_mm", "rainfall_90d_mm",
 }
-INTEGER_COLUMNS = {"horizon_days", "backtest_pairs", "n_matched", "cv_splits", "low_storage_pairs"}
+INTEGER_COLUMNS = {"horizon_days", "backtest_pairs", "n_matched", "low_storage_pairs"}
 
 metadata = MetaData()
 

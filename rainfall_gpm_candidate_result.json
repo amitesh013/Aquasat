@@ -1,0 +1,46 @@
+{
+  "title": "IMD/NCMRWF merged GPM rainfall candidate",
+  "status": "live model input with separate pooled-model comparison",
+  "forecast_horizon_days": 15,
+  "rainfall_windows_days": [7, 30, 90],
+  "rainfall_source": "IMD/NCMRWF merged gauge + GPM daily product",
+  "rainfall_first_date": "2015-10-01",
+  "rainfall_last_date": "2026-10-10",
+  "live_rainfall_last_date": "2026-10-20",
+  "rainfall_sampling": "Nearest 0.25-degree grid cell to each reservoir centre",
+  "model": "Pooled XGBoost v2",
+  "live_model": "15-day XGBoost with official storage, S2-first/S1-fallback satellite history, and prior 7/30/90-day GPM rainfall",
+  "satellite_features_used": false,
+  "paired_forecasts": 454,
+  "disputed_source_pairs": 93,
+  "all_pairs": {
+    "pairs": 454,
+    "baseline_rmse_mcft": 200.1269733947922,
+    "rainfall_rmse_mcft": 199.8775632562597,
+    "baseline_rmse_pct_capacity": 9.27739070729832,
+    "rainfall_rmse_pct_capacity": 9.309450574228704,
+    "baseline_mae_mcft": 117.44496949303085,
+    "rainfall_mae_mcft": 117.21753371307575
+  },
+  "development": {
+    "pairs": 444,
+    "baseline_rmse_mcft": 200.26158623613915,
+    "rainfall_rmse_mcft": 200.00324686900223,
+    "baseline_rmse_pct_capacity": 9.331824242333099,
+    "rainfall_rmse_pct_capacity": 9.365963822025652,
+    "baseline_mae_mcft": 117.27088769222429,
+    "rainfall_mae_mcft": 117.10161639568868
+  },
+  "september_october_2026": {
+    "pairs": 10,
+    "target_start_date": "2026-09-01",
+    "baseline_rmse_mcft": 194.05607197583288,
+    "rainfall_rmse_mcft": 194.21525288312728,
+    "baseline_rmse_pct_capacity": 6.410484897521562,
+    "rainfall_rmse_pct_capacity": 6.309179068628398,
+    "baseline_mae_mcft": 125.17420144884287,
+    "rainfall_mae_mcft": 122.36426260506173
+  },
+  "forecast_model_includes_rainfall": true,
+  "source_summary_file": "forecast_backtest_xgb_v2_gpm_summary_candidate.csv"
+}

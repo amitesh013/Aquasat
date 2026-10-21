@@ -1,9 +1,11 @@
-"""Read-only REST API used by the local AquaSat Streamlit dashboard."""
+"""Read-only REST API used by AquaSat dashboards and research views."""
 
 from __future__ import annotations
 
 from datetime import date
+import json
 import os
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,8 +23,8 @@ app = FastAPI(
     title="AquaSat API",
     version="1.0.0",
     description=(
-        "Read-only API for validated AquaSat dashboard observations, forecasts, "
-        "and calibration metrics. CSV processing outputs are synced into SQLite."
+        "Read-only API for AquaSat dashboard observations, forecasts, calibration "
+        "metrics, and saved research results. CSV processing outputs are synced into SQLite."
     ),
 )
 
@@ -125,3 +127,17 @@ def reservoir_forecast(
 def data_status() -> dict:
     _sync_or_503()
     return read_dashboard()["data_status"]
+
+
+@app.get("/api/v1/research/rainfall-candidate", tags=["research"])
+def rainfall_candidate() -> dict:
+    """Serve the reviewed GPM rainfall comparison separately from live forecasts."""
+    path = Path(__file__).resolve().parent / "rainfall_gpm_candidate_result.json"
+    try:
+        with path.open("r", encoding="utf-8") as source:
+            return json.load(source)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Saved rainfall candidate results are unavailable.",
+        ) from exc
