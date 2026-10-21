@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import numpy as np
@@ -147,6 +148,69 @@ def read_satellite_histories(
     return output
 
 
+def read_rainfall_histories(
+    path: str | Path,
+    reservoirs: dict[str, float],
+) -> dict[str, pd.Series]:
+    """Load daily nearest-cell rainfall without treating missing days as dry."""
+    source = Path(path)
+    if not source.is_file():
+        raise FileNotFoundError(f"Rainfall history not found: {source.resolve()}")
+    frame = pd.read_csv(source)
+    required = {"date", "reservoir", "rainfall_mm"}
+    missing = required.difference(frame.columns)
+    if missing:
+        raise ValueError(
+            f"Rainfall CSV is missing columns: {', '.join(sorted(missing))}"
+        )
+    frame["date"] = pd.to_datetime(frame["date"], errors="coerce").dt.normalize()
+    frame["reservoir"] = frame["reservoir"].astype(str).str.strip().str.lower()
+    frame["rainfall_mm"] = pd.to_numeric(frame["rainfall_mm"], errors="coerce")
+    frame = frame.dropna(subset=["date"])
+    if frame.duplicated(["date", "reservoir"]).any():
+        raise ValueError("Rainfall CSV has duplicate date/reservoir rows.")
+
+    histories: dict[str, pd.Series] = {}
+    for lake in reservoirs:
+        group = frame[frame["reservoir"] == lake].sort_values("date")
+        if group.empty:
+            raise ValueError(f"No rainfall history found for {lake} in {source.resolve()}.")
+        histories[lake] = pd.Series(
+            group["rainfall_mm"].to_numpy(dtype=float),
+            index=pd.DatetimeIndex(group["date"]),
+            name=lake,
+        ).sort_index()
+    return histories
+
+
+def rainfall_window_totals(
+    rainfall_history: pd.Series | None,
+    origin: pd.Timestamp,
+    rainfall_windows: tuple[int, ...] = (7, 30, 90),
+) -> dict[int, float]:
+    """Return complete rainfall totals strictly before the forecast origin.
+
+    Incomplete or missing daily windows remain NaN instead of being interpreted
+    as zero rainfall. A rainfall value dated on the origin is never included.
+    """
+    if rainfall_history is None or rainfall_history.empty:
+        return {days: float("nan") for days in rainfall_windows}
+    rain = rainfall_history.copy()
+    rain.index = pd.to_datetime(rain.index).normalize()
+    rain = pd.to_numeric(rain, errors="coerce").sort_index()
+    rain = rain[~rain.index.duplicated(keep="last")]
+    origin = pd.Timestamp(origin).normalize()
+    rain = rain[rain.index < origin]
+
+    totals: dict[int, float] = {}
+    for days in rainfall_windows:
+        start = origin - pd.DateOffset(days=days)
+        window = rain[(rain.index >= start) & (rain.index < origin)]
+        complete = len(window) == days and window.index.nunique() == days and not window.isna().any()
+        totals[days] = float(window.sum()) if complete else float("nan")
+    return totals
+
+
 def xgb_features(
     history: pd.Series,
     origin: pd.Timestamp,
@@ -154,6 +218,7 @@ def xgb_features(
     capacity: float,
     satellite_history: pd.Series | None = None,
     rainfall_history: pd.Series | None = None,
+    rainfall_windows: tuple[int, ...] = (7, 30, 90),
 ) -> dict[str, float]:
     """Make features using observations available on or before the origin.
 
@@ -190,20 +255,11 @@ def xgb_features(
     features["target_year_sin"] = float(np.sin(target_year_angle))
     features["target_year_cos"] = float(np.cos(target_year_angle))
 
-    if rainfall_history is not None and not rainfall_history.empty:
-        rain = rainfall_history.copy()
-        rain.index = pd.to_datetime(rain.index).normalize()
-        rain = pd.to_numeric(rain, errors="coerce").dropna().sort_index()
-        rain = rain[~rain.index.duplicated(keep="last")]
-        rain = rain[rain.index < origin]
-        for days in (7, 30, 90):
-            start = origin - pd.Timedelta(days, unit="D")
-            window = rain[(rain.index >= start) & (rain.index < origin)]
-            # Do not silently treat missing rainfall dates as zero rainfall.
-            complete = len(window) == days and window.index.nunique() == days
-            features[f"rainfall_{days}d_mm"] = (
-                float(window.sum()) if complete else float("nan")
-            )
+    if rainfall_history is not None:
+        for days, total in rainfall_window_totals(
+            rainfall_history, origin, rainfall_windows
+        ).items():
+            features[f"rainfall_{days}d_mm"] = total
 
     if satellite_history is not None and not satellite_history.empty:
         available_satellite = satellite_history[satellite_history.index <= origin].dropna().sort_index()
@@ -233,7 +289,7 @@ def _make_estimator(config: dict[str, float | int | str]):
         from xgboost import XGBRegressor
     except ImportError as exc:
         raise SystemExit("XGBoost is required. Install it with: python -m pip install xgboost") from exc
-    return XGBRegressor(
+    params = dict(
         objective="reg:squarederror",
         n_estimators=int(config["n_estimators"]),
         max_depth=int(config["max_depth"]),
@@ -248,6 +304,10 @@ def _make_estimator(config: dict[str, float | int | str]):
         random_state=42,
         verbosity=0,
     )
+    device = os.environ.get("AQUASAT_XGB_DEVICE", "cpu").strip().lower()
+    if device != "cpu":
+        params["device"] = device
+    return XGBRegressor(**params)
 
 
 def _sample_weight(anchors: pd.Series, origin: pd.Timestamp, half_life_years: float) -> np.ndarray:
@@ -262,6 +322,7 @@ def build_xgb_training_pool(
     capacity: float,
     satellite_history: pd.Series | None,
     rainfall_history: pd.Series | None = None,
+    rainfall_windows: tuple[int, ...] = (7, 30, 90),
 ) -> pd.DataFrame:
     """Precompute origin-safe features once for all historical weekly anchors."""
     known = history.dropna().sort_index()
@@ -283,7 +344,8 @@ def build_xgb_training_pool(
         current = float(anchor_history.iloc[-1])
         typical_target = anchor + pd.Timedelta(days=horizon)
         features = xgb_features(
-            known, anchor, typical_target, capacity, satellite_history, rainfall_history
+            known, anchor, typical_target, capacity,
+            satellite_history, rainfall_history, rainfall_windows,
         )
         features["anchor_date"] = anchor
         features["anchor_storage_mcft"] = current
@@ -364,6 +426,7 @@ def xgboost_prediction(
     config_cache: dict[str, dict[str, float | int | str]] | None = None,
     config_key: str = "xgboost",
     rainfall_history: pd.Series | None = None,
+    rainfall_windows: tuple[int, ...] = (7, 30, 90),
 ) -> float | None:
     """Predict storage change with chronologically tuned XGBoost."""
     known = history[history.index <= origin].dropna().sort_index()
@@ -372,7 +435,8 @@ def xgboost_prediction(
     horizon = (target - origin).days
     if training_pool is None:
         training_pool = build_xgb_training_pool(
-            known, horizon, 3, capacity, satellite_history, rainfall_history
+            known, horizon, 3, capacity,
+            satellite_history, rainfall_history, rainfall_windows,
         )
     examples = _training_examples(training_pool, origin, horizon, capacity)
     if len(examples) < 24:
@@ -391,7 +455,10 @@ def xgboost_prediction(
     estimator.fit(examples[feature_columns], examples["target_delta_fraction"].to_numpy(dtype=float), sample_weight=weights)
     latest_value = float(known.iloc[-1])
     test_features = pd.DataFrame([
-        xgb_features(known, origin, target, capacity, satellite_history, rainfall_history)
+        xgb_features(
+            known, origin, target, capacity,
+            satellite_history, rainfall_history, rainfall_windows,
+        )
     ], columns=feature_columns)
     delta_fraction = float(estimator.predict(test_features)[0])
     return float(np.clip(latest_value + delta_fraction * capacity, 0.0, capacity))
