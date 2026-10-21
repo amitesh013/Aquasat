@@ -12,6 +12,7 @@ best clear-area coverage. This remains a candidate output, not a replacement.
 """
 from __future__ import annotations
 
+import argparse
 import csv
 import datetime as dt
 import os
@@ -25,7 +26,7 @@ PROJECT = "aquasat-508704"
 # source. Keep extraction pinned so an old shell variable cannot select v2.
 BOUNDARY_VERSION = "v3"
 BOUNDARIES_ASSET = "projects/aquasat-508704/assets/chennai_reservoir_boundaries_v3"
-OUTPUT_SUFFIX = f"_{BOUNDARY_VERSION}_candidate"
+DEFAULT_OUTPUT_SUFFIX = f"{BOUNDARY_VERSION}_candidate"
 S2_COLLECTION = "COPERNICUS/S2_HARMONIZED"
 CLOUD_SCORE_COLLECTION = "GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED"
 RESERVOIRS = ("poondi", "cholavaram", "puzhal", "chembarambakkam", "veeranam")
@@ -74,12 +75,40 @@ def sum_value(image: ee.Image, band: str, geometry: ee.Geometry, scale: int):
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--start-date",
+        default=f"{START_YEAR}-01-01",
+        help="First acquisition date to query (inclusive, YYYY-MM-DD).",
+    )
+    parser.add_argument(
+        "--end-date",
+        default=dt.date.today().isoformat(),
+        help="Last acquisition date to query (inclusive, YYYY-MM-DD).",
+    )
+    parser.add_argument(
+        "--output-suffix",
+        default=DEFAULT_OUTPUT_SUFFIX,
+        help="Filename suffix for the five per-reservoir outputs; use a new suffix to preserve earlier candidates.",
+    )
+    args = parser.parse_args()
+    try:
+        start_date = dt.date.fromisoformat(args.start_date)
+        end_date = dt.date.fromisoformat(args.end_date)
+    except ValueError as exc:
+        parser.error(f"dates must use YYYY-MM-DD: {exc}")
+    if start_date > end_date:
+        parser.error("--start-date must be on or before --end-date")
+    if not args.output_suffix or any(char not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for char in args.output_suffix):
+        parser.error("--output-suffix may contain only letters, numbers, underscores, and hyphens")
+
     ee.Initialize(project=PROJECT)
     boundaries = ee.FeatureCollection(BOUNDARIES_ASSET)
     boundary_features = boundaries.getInfo().get("features", [])
     cloud_scores = ee.ImageCollection(CLOUD_SCORE_COLLECTION)
-    start_date = dt.date(START_YEAR, 1, 1)
-    end_date = dt.date.today() + dt.timedelta(days=1)
+    # Earth Engine's filterDate end is exclusive; add one day so the user's
+    # end date is included in the requested acquisition range.
+    exclusive_end_date = end_date + dt.timedelta(days=1)
     output_properties = [
         "image_id", "image_date", "image_ymd", "scene_cloud_percent",
         "image_footprint_fraction", "clear_area_fraction", "water_area_sqm",
@@ -111,10 +140,12 @@ def main() -> None:
         source = (
             ee.ImageCollection(S2_COLLECTION)
             .filterBounds(geometry)
-            .filterDate(start_date.isoformat(), end_date.isoformat())
+            .filterDate(start_date.isoformat(), exclusive_end_date.isoformat())
             .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", MAX_SCENE_CLOUD_PERCENT))
         )
-        linked_scores = cloud_scores.filterDate(start_date.isoformat(), end_date.isoformat())
+        linked_scores = cloud_scores.filterDate(
+            start_date.isoformat(), exclusive_end_date.isoformat()
+        )
 
         def add_quality(image):
             image = ee.Image(image).linkCollection(linked_scores, [CLEAR_SCORE_BAND])
@@ -209,7 +240,7 @@ def main() -> None:
                 })
             print(f"  processed {image_count} scenes; kept {len(output_rows)} dates after daily deduplication")
 
-        output_path = Path(f"{reservoir}_satellite_areas{OUTPUT_SUFFIX}.csv")
+        output_path = Path(f"{reservoir}_satellite_areas_{args.output_suffix}.csv")
         with output_path.open("w", newline="", encoding="utf-8") as stream:
             writer = csv.DictWriter(stream, fieldnames=FIELDS)
             writer.writeheader()
