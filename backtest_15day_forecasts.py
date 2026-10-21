@@ -177,6 +177,8 @@ def build_backtest(
     tolerance: int,
     satellite_histories: dict[str, pd.Series] | None = None,
     include_prophet: bool = True,
+    rainfall_histories: dict[str, pd.Series] | None = None,
+    rainfall_windows: tuple[int, ...] = (7,),
 ) -> pd.DataFrame:
     results: list[dict[str, object]] = []
     xgb_pools = {
@@ -189,6 +191,33 @@ def build_backtest(
         )
         for lake, observations in series_by_lake.items()
         if satellite_histories and lake in satellite_histories
+    }
+    rainfall_xgb_pools = {
+        lake: build_xgb_training_pool(
+            observations,
+            horizon,
+            tolerance,
+            CAPACITY[lake],
+            None,
+            rainfall_histories[lake],
+            rainfall_windows,
+        )
+        for lake, observations in series_by_lake.items()
+        if rainfall_histories and lake in rainfall_histories and not satellite_histories
+    }
+    satellite_rainfall_xgb_pools = {
+        lake: build_xgb_training_pool(
+            observations,
+            horizon,
+            tolerance,
+            CAPACITY[lake],
+            satellite_histories[lake],
+            rainfall_histories[lake],
+            rainfall_windows,
+        )
+        for lake, observations in series_by_lake.items()
+        if satellite_histories and lake in satellite_histories
+        and rainfall_histories and lake in rainfall_histories
     }
     xgb_config_cache: dict[str, dict[str, float | int | str]] = {}
     for lake, observations in series_by_lake.items():
@@ -235,6 +264,47 @@ def build_backtest(
                     satellite_histories[lake], satellite_xgb_pools[lake],
                     xgb_config_cache, f"{lake}:satellite",
                 )
+            if rainfall_histories and lake in rainfall_histories:
+                rain = rainfall_histories[lake]
+                for days in rainfall_windows:
+                    window = rain[
+                        (rain.index >= origin - pd.DateOffset(days=int(days))) &
+                        (rain.index < origin)
+                    ]
+                    if len(window) != days or window.index.nunique() != days or window.isna().any():
+                        raise ValueError(
+                            f"Incomplete {days}-day rainfall window for {lake} before "
+                            f"{origin:%Y-%m-%d}; refusing to score a missing rainfall feature."
+                        )
+                if satellite_histories and lake in satellite_histories:
+                    predictions["xgboost_satellite_rainfall"] = xgboost_prediction(
+                        available,
+                        origin,
+                        target,
+                        capacity,
+                        satellite_history=satellite_histories[lake],
+                        training_pool=satellite_rainfall_xgb_pools[lake],
+                        config_cache=xgb_config_cache,
+                        config_key=(
+                            f"{lake}:satellite_rainfall:"
+                            f"{','.join(map(str, rainfall_windows))}"
+                        ),
+                        rainfall_history=rain,
+                        rainfall_windows=rainfall_windows,
+                    )
+                else:
+                    predictions["xgboost_rainfall"] = xgboost_prediction(
+                        available,
+                        origin,
+                        target,
+                        capacity,
+                        satellite_history=None,
+                        training_pool=rainfall_xgb_pools[lake],
+                        config_cache=xgb_config_cache,
+                        config_key=f"{lake}:storage_only_rainfall:{','.join(map(str, rainfall_windows))}",
+                        rainfall_history=rain,
+                        rainfall_windows=rainfall_windows,
+                    )
             if include_prophet:
                 predictions["prophet"] = prophet_prediction(available, origin, target, capacity)
             row: dict[str, object] = {
@@ -261,7 +331,11 @@ def print_summary(results: pd.DataFrame) -> None:
         print("No eligible forecast/actual pairs found. Check the input date range and official readings.")
         return
     summary = []
-    methods = ("persistence", "seasonal", "seasonal_damped_trend", "xgboost", "xgboost_satellite", "prophet")
+    methods = (
+        "persistence", "seasonal", "seasonal_damped_trend", "xgboost",
+        "xgboost_satellite", "xgboost_rainfall",
+        "xgboost_satellite_rainfall", "prophet",
+    )
     for lake in CAPACITY:
         lake_rows = results[results["reservoir"] == lake]
         for method in methods:
@@ -301,6 +375,11 @@ def main() -> None:
                         help="Accept actual readings within this many days of the horizon.")
     parser.add_argument("--satellite", default="sentinel2_v3_clear95_accuracy_ready.csv",
                         help="Quality-filtered Sentinel-2 matches or the OOS storage candidate from build_sentinel2_storage.py.")
+    parser.add_argument("--no-satellite", action="store_true",
+                        help="Disable all satellite features for a storage-only candidate comparison.")
+    parser.add_argument("--rainfall", help="Optional daily rainfall CSV; adds rainfall-assisted XGBoost candidates. When satellite history is available, also scores the combined satellite-plus-rainfall model.")
+    parser.add_argument("--rainfall-windows", nargs="+", type=int, choices=(7, 30, 90), default=[7],
+                        help="Antecedent rainfall accumulation windows. Defaults to 7 days when --rainfall is supplied.")
     parser.add_argument("--skip-prophet", action="store_true",
                         help="Skip Prophet so the XGBoost experiment finishes sooner.")
     parser.add_argument("--output", default="forecast_backtest_15day_results.csv")
@@ -317,12 +396,57 @@ def main() -> None:
     monthly_frame = pd.read_csv(monthly_path)
     monthly_histories = {lake: monthly_series(monthly_frame, lake) for lake in CAPACITY}
     satellite_path = Path(args.satellite)
-    satellite_histories = read_satellite_histories(satellite_path, CAPACITY, excluded_pairs=excluded) if satellite_path.exists() else {}
+    satellite_histories = (
+        {} if args.no_satellite else
+        read_satellite_histories(satellite_path, CAPACITY, excluded_pairs=excluded)
+        if satellite_path.exists() else {}
+    )
     if satellite_histories:
         print(f"Satellite-derived lagged features loaded for {len(satellite_histories)} reservoirs from {satellite_path}")
         print("Satellite estimates are out-of-sample: each image uses only earlier, non-disputed exact-date matches.")
     else:
-        print(f"No satellite features loaded from {satellite_path}; XGBoost will use storage history only.")
+        print("Satellite features are disabled; XGBoost candidates use storage history only.")
+    rainfall_histories = None
+    rainfall_windows: tuple[int, ...] = tuple()
+    if args.rainfall:
+        rainfall_path = Path(args.rainfall)
+        if not rainfall_path.exists():
+            raise SystemExit(f"Rainfall input file not found: {rainfall_path.resolve()}")
+        rainfall_frame = pd.read_csv(rainfall_path)
+        required_rainfall = {"date", "reservoir", "rainfall_mm"}
+        missing_rainfall = required_rainfall.difference(rainfall_frame.columns)
+        if missing_rainfall:
+            raise SystemExit(
+                "Rainfall input is missing columns: " + ", ".join(sorted(missing_rainfall))
+            )
+        rainfall_frame["date"] = pd.to_datetime(rainfall_frame["date"], errors="coerce").dt.normalize()
+        rainfall_frame["reservoir"] = rainfall_frame["reservoir"].astype(str).str.strip().str.lower()
+        rainfall_frame["rainfall_mm"] = pd.to_numeric(rainfall_frame["rainfall_mm"], errors="coerce")
+        rainfall_frame = rainfall_frame.dropna(subset=["date"])
+        rainfall_histories = {}
+        for lake in CAPACITY:
+            group = rainfall_frame[rainfall_frame["reservoir"] == lake].sort_values("date")
+            group = group.drop_duplicates("date", keep="last")
+            if group.empty:
+                raise SystemExit(f"No rainfall history found for {lake} in {rainfall_path.resolve()}")
+            rainfall_histories[lake] = pd.Series(
+                group["rainfall_mm"].to_numpy(dtype=float),
+                index=pd.DatetimeIndex(group["date"]),
+                name=lake,
+            ).sort_index()
+        rainfall_windows = tuple(args.rainfall_windows)
+        if not rainfall_windows or len(set(rainfall_windows)) != len(rainfall_windows):
+            raise SystemExit("--rainfall-windows must contain unique values from 7, 30, and 90.")
+        satellite_note = (
+            "the combined model also includes satellite-history features."
+            if satellite_histories else
+            "satellite features are disabled for this comparison."
+        )
+        print(
+            f"Rainfall candidate enabled for {len(rainfall_histories)} reservoirs; "
+            f"windows: {', '.join(f'{days}d' for days in rainfall_windows)}; "
+            f"{satellite_note}"
+        )
     results = build_backtest(
         series_by_lake,
         monthly_histories,
@@ -332,6 +456,8 @@ def main() -> None:
         args.target_window_days,
         satellite_histories,
         include_prophet=not args.skip_prophet,
+        rainfall_histories=rainfall_histories,
+        rainfall_windows=rainfall_windows or (7,),
     )
     output_path = Path(args.output)
     results.to_csv(output_path, index=False)
