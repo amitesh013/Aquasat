@@ -1,10 +1,10 @@
 # AquaSat
 
-AquaSat is transitioning from a Streamlit-and-CSV prototype to a React + FastAPI dashboard backed by a relational database. The React app is under `frontend/`; the existing Streamlit UI remains available as a legacy/research interface. Neon PostgreSQL is the selected hosted database, while SQLite provides an offline local-development option. The API currently imports the reviewed dashboard CSV snapshot into the database; automated CMWSSB, IMD, or Earth Engine ingestion is not enabled.
+AquaSat is a React + FastAPI reservoir research dashboard backed only by Neon PostgreSQL. The public home page is at `/`, account creation is at `/signup`, sign-in is at `/login`, and authenticated dashboard views are at `/dashboard`. A single container serves the React frontend and API. The legacy Streamlit/research scripts remain in the repository but are not part of the deployed application.
 
-## Run the React dashboard locally
+## Run locally
 
-Requirements: Python 3.10 or newer, Node.js 20.19+ (or 22.12+), npm, and the project CSV outputs in this folder.
+Requirements: Python 3.10 or newer, Node.js 20.19+ (or 22.12+), npm, and the Neon connection string. Copy `.env.example` to `.env`, then set `DATABASE_URL`. `.env` is ignored by Git. For local HTTP development, leave `AQUASAT_COOKIE_SECURE=false`.
 
 ```powershell
 python -m pip install -r requirements-api.txt
@@ -12,25 +12,37 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\run_react.ps1
 ```
 
-Open `http://127.0.0.1:5173`. The launcher starts FastAPI at `http://127.0.0.1:8765`, syncs the three dashboard CSV outputs into a local SQLite database on first request, and runs the Vite development server. Stop it with Ctrl+C. The API's interactive schema is at `http://127.0.0.1:8765/docs`.
+Open `http://127.0.0.1:5173`. The launcher applies database migrations, starts FastAPI at `http://127.0.0.1:8765`, and runs the Vite development server. It does not re-upload source files every time the app starts. Create an account with a unique username, email, and password of at least 6 characters; then sign in with your username (or email) and password. Stop it with Ctrl+C. The API schema is at `http://127.0.0.1:8765/docs`.
 
-For a manual two-terminal run, start `python -m uvicorn aquasat_api:app --host 127.0.0.1 --port 8765` from the repository root, then run `npm install` and `npm run dev` from `frontend/`.
+Open `/signup` to create an account with a unique username, email, and password of at least 6 characters. Existing accounts receive a username based on their email when the new migration runs and can continue signing in with either username or email. Every account can view the same read-only research dashboard.
 
-### Use Neon PostgreSQL
+## Deploy with Docker
 
-Copy `.env.example` to `.env`, put your Neon connection string in `DATABASE_URL`, and keep `.env` out of Git. Use Neon’s PostgreSQL connection string with SSL enabled. Then, from the repository root, run:
+The Docker image builds the React app and serves it with FastAPI. The image intentionally excludes source CSVs and database credentials; dashboard data is read from Neon.
 
 ```powershell
-python -m pip install -r requirements-api.txt
-alembic upgrade head
-python sync_aquasat_database.py
+docker build -t aquasat .
+docker run --rm --env-file .env -p 8000:8000 aquasat
 ```
 
-Then launch the API and React UI as above. For a separately hosted frontend, set `VITE_API_BASE_URL` to the API's HTTPS base URL and add the frontend's HTTPS origin to `AQUASAT_CORS_ORIGINS`. Never put the database URL in frontend variables or commit it.
+For a cloud container host, deploy this repository using its `Dockerfile` and set the server-side environment variables `DATABASE_URL` (Neon URL with SSL) and `AQUASAT_COOKIE_SECURE=true`. Do not put the database URL in React variables or commit it. The app applies Alembic migrations when the container starts. The reviewed dashboard snapshot is already imported; run `python sync_aquasat_database.py` only when intentionally refreshing that snapshot.
 
-The initial schema stores reservoirs, official and Sentinel-2 observations, forecast rows, calibration metrics, and source-file hashes/sync times. The UI reads the existing forecast and satellite outputs; it does not retrain a model or improve accuracy just because the data now sits in PostgreSQL. Scheduled ingestion and production hosting still need to be configured separately.
+The Neon schema and reviewed dashboard snapshot are already loaded. It stores reservoirs, official and satellite observations, forecast rows, calibration metrics, and source-file hashes/sync times. The UI reads saved model outputs; Neon does not retrain a model or improve accuracy. Automated CMWSSB, IMD, or Earth Engine ingestion is not enabled. Accounts use a unique username and password (with an email address for the account); passwords are stored as Argon2id hashes, and server sessions are revocable and stored in Neon. Email verification and password recovery are not implemented yet. Registration is open, and all users see the same read-only dashboard rather than private per-user data.
 
-The old Streamlit interface can still be launched with `python -m streamlit run app.py` after installing `requirements.txt`. The simpler `run_aquasat.ps1` launcher is retained for that legacy UI.
+## Deploy on Vercel
+
+This repository includes `Dockerfile.vercel`, which builds the React frontend and runs FastAPI in the same container. Vercel's container deployment uses the `PORT` environment variable; the image defaults it to port 80. Connect the GitHub repository to Vercel and leave the project root at the repository root. Vercel builds and deploys the container on each deployment.
+
+In Vercel **Project Settings → Environment Variables**, add these server-side variables for Production (and Preview too if you want preview deployments to work):
+
+| Name | Value |
+| --- | --- |
+| `DATABASE_URL` | Neon PostgreSQL connection string, with SSL enabled |
+| `AQUASAT_COOKIE_SECURE` | `true` |
+
+Keep `DATABASE_URL` in Vercel's server-side environment settings; do not add it to `frontend/.env` or commit it. The database connection string is used by the API and migration startup. After the first deployment, check `/health`, open `/signup`, create your account, and confirm the dashboard loads. All persistent app data stays in Neon; the Vercel container itself is stateless. See Vercel's [Docker deployment guide](https://vercel.com/kb/docker).
+
+The old Streamlit research interface can still be launched with `python -m streamlit run app.py` after installing `requirements.txt`; it is separate from the Neon-backed deployed React application.
 
 AquaSat is a research demonstration for satellite-based reservoir storage estimation and forecasting for Chennai.
 

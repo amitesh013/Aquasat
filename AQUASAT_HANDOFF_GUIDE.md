@@ -16,18 +16,19 @@ The GitHub checkout is `Aquasat/.github_checkout` in the current workspace. The 
 |---|---|---|
 | React client | `frontend/` with React, TypeScript, Vite, Recharts, and Lucide | Responsive overview, reservoir detail, forecast, validation, and methodology pages. |
 | REST API | `aquasat_api.py` (FastAPI) | Read-only JSON endpoints under `/api/v1`; Vite proxies local API requests during development. |
-| Data access | `aquasat_database.py` using SQLAlchemy Core | Same application interface for local SQLite and hosted PostgreSQL. |
+| Data access | `aquasat_database.py` using SQLAlchemy Core | Neon PostgreSQL only; a server-side `DATABASE_URL` is required. |
 | PostgreSQL schema | `migrations/` and `alembic.ini` | Versioned schema creation/update for a Neon or compatible PostgreSQL database. |
 | CSV import | `sync_aquasat_database.py` | Validates the three current dashboard CSVs, imports a consistent snapshot, and records SHA-256, row count, and sync time. |
 | Local launcher | `run_react.ps1` | Starts the API in a hidden PowerShell process and runs the Vite server; Ctrl+C stops the React server and its API child. |
 | Environment examples | `.env.example`, `frontend/.env.example` | Explain server-only database URL and optional deployed API base URL; actual secrets are not committed. |
-| Existing Streamlit UI | `app.py`, `run_aquasat.ps1` | Retained as a compatibility/research interface; the React app is the new UI path. Its database label now reflects SQLite versus PostgreSQL. |
+| Public website and access | React routes `/`, `/signup`, `/login`, `/dashboard`; FastAPI session cookie | Public home page, persistent username/password account creation, protected data APIs, and sign-out. Passwords are Argon2id hashes; revocable sessions are stored in Neon. |
+| Container deployment | `Dockerfile`, `.dockerignore` | Builds the React app, runs PostgreSQL migrations, and serves UI/API together without packaging source CSVs or secrets. |
 
 ### Chosen stack and why
 
 - **React + TypeScript + Vite** is the new browser UI. The layout is responsive, keeps the five-lake overview legible without horizontal clipping, and separates overview, per-reservoir history, forecast, validation, and methodology.
 - **FastAPI REST** is the browser-to-server interface. REST is the API style; FastAPI is the Python framework serving it. The frontend never connects directly to the database.
-- **Neon PostgreSQL** is the selected hosted database because AquaSat records are related structured time-series with official/satellite sources, forecasts, model metadata, and import provenance. SQLite remains the zero-account local fallback. Firebase was not selected because this project already has relational Python data and PostgreSQL/SQLAlchemy migration infrastructure.
+- **Neon PostgreSQL** is the only database used by the React + FastAPI application. A missing or invalid `DATABASE_URL` is an error; there is no file-database fallback. Firebase was not selected because the project already has relational Python data and PostgreSQL/SQLAlchemy migration infrastructure.
 - CSV remains the current reviewed/reproducible input artifact and is imported into the database. This transition avoids changing the existing forecasting/calibration pipeline or silently replacing evidence. Data storage changes do not improve RMSE.
 
 ### Local run instructions
@@ -40,7 +41,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\run_react.ps1
 ```
 
-Open `http://127.0.0.1:5173`. The local React dev server proxies `/api` and `/health` to FastAPI at `http://127.0.0.1:8765`. SQLite schema creation and first CSV synchronization occur when the API is used. API documentation is at `http://127.0.0.1:8765/docs`.
+Copy `.env.example` to `.env` and set `DATABASE_URL` to the Neon PostgreSQL connection string. Run `run_react.ps1`; it migrates Neon before starting FastAPI and Vite. Open `http://127.0.0.1:5173/signup` to create an account with a unique username, email, and password of at least six characters. Sign in at `/login` with the username or email and password; the protected dashboard is at `/dashboard`. Account creation stores a password hash and a revocable session in Neon. The reviewed dashboard snapshot is imported separately with `python sync_aquasat_database.py` when authorized. API documentation is at `http://127.0.0.1:8765/docs`.
 
 If running services separately, use two PowerShell windows:
 
@@ -58,26 +59,31 @@ npm run dev
 
 Node.js must meet the Vite version listed in `frontend/package.json` (currently 20.19+ or 22.12+). `frontend/package-lock.json` records the resolved frontend dependencies.
 
-### Set up Neon when the owner is ready
+### Neon database and deployment
 
-1. Create a PostgreSQL project/database in the owner’s Neon account and copy its pooled or direct PostgreSQL connection string with SSL enabled.
-2. Copy `.env.example` to `.env` in the repository root. Set `DATABASE_URL` there. **Do not paste this secret into React, a screenshot, Git, or a handoff prompt.**
-3. Install API requirements and run `alembic upgrade head` from the repository root to create the versioned schema and seed the five reservoir definitions.
-4. Run `python sync_aquasat_database.py` to import the existing `dashboard_data.csv`, `reservoir_forecasts.csv`, and `metrics.csv` snapshot. Check the printed backend and source row counts before starting the app.
-5. Start the API with Uvicorn. For a separately hosted React frontend, set `VITE_API_BASE_URL` to the public HTTPS API URL at frontend build time and configure `AQUASAT_CORS_ORIGINS` on the API to the frontend’s exact HTTPS origin.
-6. Provision a persistent API host and frontend host separately. The API process needs outbound access to Neon and the dashboard CSV artifacts at initial import time. Keep database credentials in the host’s server-side secret settings.
+1. AquaSat’s `aquasat` database is provisioned in Neon. The app applies all pending Alembic revisions, including the account and username tables, at startup. Existing accounts are assigned a unique username derived from their email address.
+2. The reviewed dashboard snapshot still needs its first import via `python sync_aquasat_database.py`; configure `DATABASE_URL` only in `.env` or the hosting provider’s server-side secret settings.
+3. The deployment container builds and serves the React frontend and FastAPI API together. It excludes source CSV files and does not re-import them during container restarts.
+4. Set `AQUASAT_COOKIE_SECURE=true` in the HTTPS hosting environment. Keep `DATABASE_URL` server-side. Registration is open; all accounts can view the same read-only dashboard.
+5. Use the repository `Dockerfile` on a container host and configure its required `DATABASE_URL` and port. `/health` is the health-check route.
 
-**Not done / not claimed:** no Neon project was created because this workspace has no user database credentials; no data was uploaded to Neon; no domain/hosting deployment was made; scheduled CMWSSB, IMD, or Earth Engine collection is not implemented; the React client does not retrain the XGBoost or satellite models. Deployment and scheduled ingestion are future steps that require their own design, owner account settings, and operational validation.
+**Not done / not claimed:** AquaSat has not been published to a public hosting provider or connected to a custom domain; scheduled CMWSSB, IMD, or Earth Engine collection is not implemented; the React client does not retrain the XGBoost or satellite models. The React/API code is container-ready; the owner still chooses a host and enters private deployment secrets there.
 
 ### What the screenshot/API warning means after the redesign
 
 The attached Streamlit screenshot showed an unavailable API while Streamlit fell back to local CSVs. The old UI could therefore display readings with a warning that its configured service was not running. `run_react.ps1` is the local React launch path: it starts the FastAPI process before Vite and reports an actionable connection error if data cannot load. If using the two-window instructions, keep the Uvicorn window running. When using Neon, migrate the schema and set the server-only `DATABASE_URL` before starting the API. An API error must not be interpreted as a model or satellite accuracy result.
 
-### Read-only API routes
+### API routes and access
+
+Authentication routes are public so visitors can create an account, sign in, check their session, or sign out. Dashboard and research data routes require a valid server-side session cookie.
 
 | Route | Result |
 |---|---|
-| `GET /health` | Service/database readiness and most recent CSV sync metadata. |
+| `GET /health` | Service and Neon database connectivity. |
+| `GET /api/v1/auth/status` | Returns whether the visitor has a valid account session. |
+| `POST /api/v1/auth/register` | Creates an email/password account and signs in. |
+| `POST /api/v1/auth/login` | Verifies account credentials and issues an HTTP-only session cookie. |
+| `POST /api/v1/auth/logout` | Revokes the server-side session and clears the cookie. |
 | `GET /api/v1/dashboard` | Current observation history, forecast rows, calibration metrics, and data status for React. |
 | `GET /api/v1/reservoirs` | Five reservoir IDs, names, capacities, and latest observation date. |
 | `GET /api/v1/reservoirs/{slug}/history` | One reservoir’s records, optionally bounded with `start_date` / `end_date`. |
@@ -85,13 +91,13 @@ The attached Streamlit screenshot showed an unavailable API while Streamlit fell
 | `GET /api/v1/data-status` | Database backend and imported source provenance. |
 | `GET /api/v1/research/rainfall-candidate` | Saved GPM rainfall candidate metrics, served separately from active forecast rows. |
 
-The API remains read-only from the browser: no public write, user-management, or arbitrary CSV-upload endpoint was added. A future scheduled job should run the reviewed extraction/build pipeline, validate its candidate outputs, promote approved CSVs, then perform the database import. Do not schedule a job that overwrites production data with unreviewed research candidates.
+The dashboard data API remains read-only. Public registration only creates an account; there is no admin user-management or arbitrary CSV-upload endpoint. A future scheduled job should run the reviewed extraction/build pipeline, validate its candidate outputs, promote approved CSVs, then perform the database import. Do not schedule a job that overwrites production data with unreviewed research candidates.
 
 The React **Results** page reads the saved GPM rainfall comparison from `rainfall_gpm_candidate_result.json` through the research route above. The comparison remains separate from active forecast rows, while the live generator uses the daily GPM rainfall series as a model feature.
 
 ### Commit-by-commit record
 
-These are intentionally small, ordered milestones rather than one opaque UI rewrite. `main` should contain the 10–15 commits when the push is complete.
+The earlier Neon/API foundation was committed to `main`; the current deployment, login, and home-page changes are still in the working tree until explicitly committed and pushed.
 
 | Order | Change |
 |---:|---|

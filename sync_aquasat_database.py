@@ -1,4 +1,4 @@
-"""Manually sync current dashboard CSV outputs into the AquaSat SQLite store."""
+"""Import the reviewed dashboard CSV snapshot into Neon PostgreSQL."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ def main() -> int:
     parser.add_argument("--force", action="store_true", help="re-import even if source CSVs are unchanged")
     parser.add_argument(
         "--database-url",
-        help="optional SQLAlchemy URL; defaults to DATABASE_URL or local SQLite",
+        help="optional Neon PostgreSQL URL; defaults to DATABASE_URL",
     )
     args = parser.parse_args()
     result = sync_csv_outputs(database_url=args.database_url, force=args.force)

@@ -12,6 +12,10 @@ if (-not (Test-Path -LiteralPath (Join-Path $frontendRoot 'package.json'))) {
     throw "React frontend files were not found at $frontendRoot."
 }
 
+Write-Host 'Applying the Neon database schema...'
+& python -m alembic upgrade head
+if ($LASTEXITCODE -ne 0) { throw 'Neon schema migration failed. Check DATABASE_URL and the API log.' }
+
 $apiProcess = $null
 try {
     Write-Host 'Starting AquaSat API at http://127.0.0.1:8765 ...'

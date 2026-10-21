@@ -4,3 +4,4 @@ sqlalchemy
 psycopg[binary]
 alembic
 python-dotenv
+argon2-cffi>=23.1.0

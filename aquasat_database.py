@@ -1,9 +1,4 @@
-"""Portable SQLAlchemy storage for AquaSat dashboard data.
-
-Neon PostgreSQL is selected with DATABASE_URL. Local development uses SQLite
-when DATABASE_URL is not set. Current, reviewed dashboard CSVs are imported
-atomically and remain reproducible source artifacts during migration.
-"""
+"""Neon PostgreSQL storage for AquaSat dashboard data."""
 
 from __future__ import annotations
 
@@ -17,8 +12,9 @@ from pathlib import Path
 from typing import Any
 
 from sqlalchemy import (
-    Column, Date, Float, ForeignKey, Index, Integer, MetaData, String, Table, Text,
-    create_engine, delete, func, insert, inspect, select,
+    Boolean, Column, Date, DateTime, Float, ForeignKey, Index,
+    Integer, MetaData, String, Table, Text, create_engine, delete, func, insert,
+    inspect, select,
 )
 from sqlalchemy.engine import Engine
 from dotenv import load_dotenv
@@ -100,27 +96,49 @@ source_sync_table = Table(
     Column("synced_at_utc", String(40), nullable=False),
 )
 
+auth_user_table = Table(
+    "auth_users", metadata,
+    Column("id", String(36), primary_key=True),
+    Column("username", String(30), nullable=False, unique=True),
+    Column("email", String(320), nullable=False, unique=True),
+    Column("password_hash", String(255), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("is_active", Boolean, nullable=False, server_default="true"),
+)
+
+auth_session_table = Table(
+    "auth_sessions", metadata,
+    Column("token_hash", String(64), primary_key=True),
+    Column("user_id", String(36), ForeignKey("auth_users.id", ondelete="CASCADE"), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("expires_at", DateTime(timezone=True), nullable=False),
+)
+Index("ix_auth_sessions_user_id", auth_session_table.c.user_id)
+Index("ix_auth_sessions_expires_at", auth_session_table.c.expires_at)
+
 
 def _normalize_database_url(url: str | None = None) -> str:
     configured = (url or os.environ.get("DATABASE_URL") or "").strip()
     if not configured:
-        fallback = Path(os.environ.get("AQUASAT_DB_PATH", PROJECT_DIR / "aquasat.sqlite3"))
-        if not fallback.is_absolute():
-            fallback = PROJECT_DIR / fallback
-        return f"sqlite:///{fallback.as_posix()}"
+        raise RuntimeError(
+            "DATABASE_URL is required. Set the Neon PostgreSQL connection string "
+            "in the API environment."
+        )
     if configured.startswith("postgres://"):
         configured = "postgresql+psycopg://" + configured[len("postgres://"):]
     elif configured.startswith("postgresql://"):
         configured = "postgresql+psycopg://" + configured[len("postgresql://"):]
+    if not configured.startswith("postgresql+psycopg://"):
+        raise RuntimeError(
+            "DATABASE_URL must use PostgreSQL with the psycopg driver. "
+            "Use the Neon PostgreSQL connection string."
+        )
     return configured
 
 
 @lru_cache(maxsize=4)
 def _engine_for(url: str) -> Engine:
-    options: dict[str, Any] = {"pool_pre_ping": True}
-    if url.startswith("sqlite:"):
-        options["connect_args"] = {"check_same_thread": False, "timeout": 20}
-    return create_engine(url, **options)
+    return create_engine(url, pool_pre_ping=True)
 
 
 def get_engine(database_url: str | None = None) -> Engine:
@@ -128,19 +146,16 @@ def get_engine(database_url: str | None = None) -> Engine:
 
 
 def database_backend(database_url: str | None = None) -> str:
-    url = _normalize_database_url(database_url)
-    return "PostgreSQL (Neon or compatible)" if url.startswith("postgresql+") else "SQLite (local development)"
+    _normalize_database_url(database_url)
+    return "Neon PostgreSQL"
 
 
 def initialize_database(database_url: str | None = None) -> None:
     engine = get_engine(database_url)
-    url = _normalize_database_url(database_url)
-    if url.startswith("sqlite:"):
-        metadata.create_all(engine)
-    elif not inspect(engine).has_table("reservoirs"):
+    if not inspect(engine).has_table("reservoirs"):
         raise RuntimeError(
-            "The PostgreSQL schema is not initialized. Set DATABASE_URL and run "
-            "'alembic upgrade head' before starting AquaSat."
+            "The Neon schema is not initialized. Run 'alembic upgrade head' before "
+            "starting AquaSat."
         )
     with engine.begin() as connection:
         for slug, (display_name, capacity_mcft) in RESERVOIRS.items():

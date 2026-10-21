@@ -1,14 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
-  Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3,
-  CalendarDays, ChevronDown, CircleHelp, CloudSun, Database,
-  Droplets, Gauge, Layers3, RefreshCw, Satellite, Waves,
+  Activity, ArrowDownRight, ArrowUpRight, BarChart3,
+  ArrowRight, CalendarDays, ChevronDown, CircleHelp, CloudSun, Database,
+  Droplets, Gauge, Layers3, LogOut, RefreshCw, Satellite, ShieldCheck, Waves,
 } from "lucide-react";
 import {
   Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer,
   Tooltip, XAxis, YAxis,
 } from "recharts";
-import { getDashboard, getRainfallCandidate } from "./api";
+import { createAccount, getAuthStatus, getDashboard, getRainfallCandidate, signIn, signOut } from "./api";
+import type { AuthStatus } from "./api";
 import type { DashboardData, ForecastRow, HistoryRow, MetricRow, RainfallCandidateResult } from "./types";
 
 const reservoirs = [
@@ -38,7 +39,210 @@ function latest<T extends { date?: string; ds?: string }>(rows: T[]) {
   return [...rows].sort((a, b) => (a.date ?? a.ds ?? "").localeCompare(b.date ?? b.ds ?? "")).at(-1);
 }
 
-function App() {
+type SiteRoute = "home" | "login" | "signup" | "dashboard";
+
+function routeFromPath(pathname: string): SiteRoute {
+  if (pathname.startsWith("/dashboard")) return "dashboard";
+  if (pathname.startsWith("/login")) return "login";
+  if (pathname.startsWith("/signup") || pathname.startsWith("/register")) return "signup";
+  return "home";
+}
+
+function goTo(path: string) {
+  if (window.location.pathname !== path) window.history.pushState({}, "", path);
+  window.dispatchEvent(new Event("popstate"));
+}
+
+export default function App() {
+  const [route, setRoute] = useState<SiteRoute>(() => routeFromPath(window.location.pathname));
+  const [auth, setAuth] = useState<AuthStatus | null>(null);
+  const [checkingAuth, setCheckingAuth] = useState(false);
+  const [authError, setAuthError] = useState("");
+
+  useEffect(() => {
+    const onPopState = () => setRoute(routeFromPath(window.location.pathname));
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  useEffect(() => {
+    if (route === "home") return;
+    let active = true;
+    setCheckingAuth(true);
+    setAuthError("");
+    getAuthStatus()
+      .then((status) => {
+        if (!active) return;
+        setAuth(status);
+        if (route === "dashboard" && !status.authenticated) goTo("/login");
+        if (route !== "dashboard" && status.authenticated) goTo("/dashboard");
+      })
+      .catch((error: unknown) => {
+        if (active) setAuthError(error instanceof Error ? error.message : "Could not reach the sign-in service.");
+      })
+      .finally(() => { if (active) setCheckingAuth(false); });
+    return () => { active = false; };
+  }, [route]);
+
+  if (route === "home") return <HomePage onSignIn={() => goTo("/login")} onCreateAccount={() => goTo("/signup")} />;
+  if (route === "login") {
+    return <LoginPage
+      checking={checkingAuth}
+      initialError={authError}
+      onSignIn={async (usernameOrEmail, password) => { await signIn(usernameOrEmail, password); goTo("/dashboard"); }}
+      onCreateAccount={() => goTo("/signup")}
+      onHome={() => goTo("/")}
+    />;
+  }
+  if (route === "signup") {
+    return <SignUpPage
+      checking={checkingAuth}
+      initialError={authError}
+      onCreateAccount={async (username, email, password) => { await createAccount(username, email, password); goTo("/dashboard"); }}
+      onSignIn={() => goTo("/login")}
+      onHome={() => goTo("/")}
+    />;
+  }
+  if (checkingAuth || !auth) return <div className="site-loading"><span className="loader" /><strong>Checking your AquaSat access…</strong>{authError && <small>{authError}</small>}</div>;
+  if (!auth.authenticated) return <LoginPage
+    checking={false}
+    initialError={authError}
+    onSignIn={async (usernameOrEmail, password) => { await signIn(usernameOrEmail, password); goTo("/dashboard"); }}
+    onCreateAccount={() => goTo("/signup")}
+    onHome={() => goTo("/")}
+  />;
+  return <DashboardApp onLogout={async () => { await signOut().catch(() => undefined); goTo("/"); }} />;
+}
+
+function HomePage({ onSignIn, onCreateAccount }: { onSignIn: () => void; onCreateAccount: () => void }) {
+  return <div className="site-home">
+    <header className="site-header">
+      <a className="site-brand" href="/" onClick={(event) => { event.preventDefault(); goTo("/"); }}><span className="brand-mark"><Droplets size={20} /></span><span>AquaSat<small>WATER INTELLIGENCE</small></span></a>
+      <nav aria-label="Public navigation"><a href="#how-it-works">How it works</a><button className="site-create-account" onClick={onCreateAccount}>Create account</button><button className="site-signin" onClick={onSignIn}>Sign in <ArrowRight size={15} /></button></nav>
+    </header>
+    <main>
+      <section className="home-hero">
+        <div className="home-copy">
+          <span className="home-eyebrow"><i /> CHENNAI RESERVOIR INTELLIGENCE</span>
+          <h1>See the water.<br /><em>Plan what comes next.</em></h1>
+          <p>AquaSat brings official reservoir readings, satellite-derived storage estimates, rainfall context, and a 15-day outlook together in one research dashboard.</p>
+          <div className="home-actions"><button className="primary-cta" onClick={onCreateAccount}>Create your account <ArrowRight size={16} /></button><a href="/login" onClick={(event) => { event.preventDefault(); onSignIn(); }}>Already have an account? Sign in</a></div>
+          <div className="home-coverage"><span><b>5</b> reservoirs</span><i /><span><b>15</b> day outlook</span><i /><span><b>3</b> data sources</span></div>
+        </div>
+        <div className="home-visual" aria-label="Illustration of reservoir storage and forecast">
+          <div className="visual-topline"><span><i /> CHENNAI RESERVOIRS</span><span>CHENNAI · TN</span></div>
+          <div className="visual-water"><div className="visual-sun" /><div className="visual-hill hill-one" /><div className="visual-hill hill-two" /><div className="visual-ripple ripple-one" /><div className="visual-ripple ripple-two" /><div className="visual-ripple ripple-three" /><div className="visual-water-label"><Droplets size={17} /><span>Reservoirs in focus</span><b>CMWSSB · Sentinel · GPM</b></div></div>
+          <div className="visual-chart-card"><div><span>15-DAY OUTLOOK</span><strong>Storage forecast</strong></div><span className="visual-chart-status"><i /> XGBoost</span><svg viewBox="0 0 420 112" role="img" aria-label="Illustrative rising forecast trend"><defs><linearGradient id="waterFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#65b5a4" stopOpacity=".22"/><stop offset="1" stopColor="#65b5a4" stopOpacity="0"/></linearGradient></defs><path d="M0 84 C42 82 54 65 90 70 S138 87 170 65 S222 61 250 52 S301 66 325 44 S370 34 420 18 L420 112 L0 112 Z" fill="url(#waterFill)"/><path d="M0 84 C42 82 54 65 90 70 S138 87 170 65 S222 61 250 52 S301 66 325 44 S370 34 420 18" fill="none" stroke="#16796f" strokeWidth="3"/><circle cx="420" cy="18" r="5" fill="#16796f"/><path d="M0 100 H420 M0 62 H420 M0 24 H420" stroke="#e8efec" strokeDasharray="4 6"/></svg><div className="visual-chart-foot"><span>Official storage + satellite history</span><span>Advisory estimate</span></div></div>
+          <div className="visual-float"><span className="float-icon"><ShieldCheck size={15} /></span><span><b>Evidence-led</b><small>Each source kept traceable</small></span></div>
+        </div>
+      </section>
+      <section className="home-trust-strip">
+        <div><span className="trust-icon"><Droplets size={17} /></span><span><b>Official reservoir updates</b><small>See storage figures published by Chennai’s water authority.</small></span></div>
+        <div><span className="trust-icon satellite"><Satellite size={17} /></span><span><b>Views from satellites</b><small>Use clear images to follow water area, with radar to help on cloudy dates.</small></span></div>
+        <div><span className="trust-icon rain"><CloudSun size={17} /></span><span><b>Recent rainfall</b><small>Review rain over the past week, month and three months.</small></span></div>
+        <div><span className="trust-icon forecast"><Activity size={17} /></span><span><b>A 15-day outlook</b><small>See an estimate of how reservoir storage may change.</small></span></div>
+      </section>
+      <section className="home-approach" id="how-it-works">
+        <div className="approach-heading"><span className="eyebrow"><span className="eyebrow-line" /> HOW AQUASAT HELPS</span><h2>From today’s reservoir picture to a 15-day outlook.</h2><p>Understand what is reported, what is estimated, and what may change.</p></div>
+        <div className="approach-grid">
+          <article><span>01</span><Droplets size={19} /><h3>Start with reported storage</h3><p>See the latest storage readings from CMWSSB and how each reservoir has changed over time.</p></article>
+          <article><span>02</span><Satellite size={19} /><h3>Add another view</h3><p>Satellite images help track water area. Radar can help when clouds block a clear optical image.</p></article>
+          <article><span>03</span><CloudSun size={19} /><h3>Look ahead with context</h3><p>Recent storage, satellite views and rainfall from the past 7, 30 and 90 days inform an advisory 15-day estimate.</p></article>
+        </div>
+        <div className="home-disclaimer">CMWSSB reports remain the official storage reference. AquaSat’s outlook is an estimate to help you explore what may come next.</div>
+      </section>
+    </main>
+    <footer className="site-footer"><a className="site-brand compact" href="/" onClick={(event) => { event.preventDefault(); goTo("/"); }}><span className="brand-mark"><Droplets size={17} /></span><span>AquaSat<small>WATER INTELLIGENCE</small></span></a><span>Chennai reservoir research dashboard</span><button onClick={onSignIn}>Sign in <ArrowRight size={14} /></button></footer>
+  </div>;
+}
+
+function LoginPage({ checking, initialError, onSignIn, onCreateAccount, onHome }: {
+  checking: boolean;
+  initialError: string;
+  onSignIn: (usernameOrEmail: string, password: string) => Promise<void>;
+  onCreateAccount: () => void;
+  onHome: () => void;
+}) {
+  const [usernameOrEmail, setUsernameOrEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try { await onSignIn(usernameOrEmail, password); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to sign in. Please try again."); }
+    finally { setBusy(false); }
+  };
+
+  return <div className="login-page">
+    <header className="site-header login-header"><a className="site-brand" href="/" onClick={(event) => { event.preventDefault(); onHome(); }}><span className="brand-mark"><Droplets size={20} /></span><span>AquaSat<small>WATER INTELLIGENCE</small></span></a><button className="login-home-link" onClick={onHome}>Back to home</button></header>
+    <main className="login-layout"><section className="login-aside"><span className="home-eyebrow"><i /> CHENNAI RESERVOIRS, MADE CLEARER</span><h1>See where water stands and what may come next.</h1><p>AquaSat brings reservoir updates, satellite views, recent rainfall and a 15-day outlook together in one easy-to-follow place.</p><div className="login-aside-points"><span><Droplets size={16} /> Follow storage across five reservoirs</span><span><Satellite size={16} /> Compare official updates with satellite views</span><span><CloudSun size={16} /> See recent rainfall beside the outlook</span></div><div className="login-aside-water"><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /></div></section>
+      <section className="login-card"><span className="login-lock"><ShieldCheck size={20} /></span><span className="eyebrow">AQUASAT WORKSPACE</span><h2>Welcome back</h2><p>Sign in with your dashboard account.</p>
+        {checking ? <div className="auth-message">Checking sign-in service…</div> : <form onSubmit={submit}>
+          <label htmlFor="aquasat-username">Username or email</label><input id="aquasat-username" name="username_or_email" type="text" autoComplete="username" minLength={3} maxLength={320} value={usernameOrEmail} onChange={(event) => setUsernameOrEmail(event.target.value)} required />
+          <label htmlFor="aquasat-password">Password</label><input id="aquasat-password" name="password" type="password" autoComplete="current-password" maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} required />
+          {(error || initialError) && <div className="auth-message error" role="alert">{error || initialError}</div>}
+          <button className="primary-cta login-submit" type="submit" disabled={busy}>{busy ? "Signing in…" : "Sign in securely"}<ArrowRight size={16} /></button>
+        </form>}
+        <button className="login-back" onClick={onCreateAccount}>New to AquaSat? Create an account</button>
+        <button className="login-back" onClick={onHome}>Return to AquaSat home</button>
+      </section>
+    </main>
+    <footer className="login-footer">AquaSat · Chennai reservoir research</footer>
+  </div>;
+}
+
+function SignUpPage({ checking, initialError, onCreateAccount, onSignIn, onHome }: {
+  checking: boolean;
+  initialError: string;
+  onCreateAccount: (username: string, email: string, password: string) => Promise<void>;
+  onSignIn: () => void;
+  onHome: () => void;
+}) {
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError("");
+    if (password !== confirmPassword) {
+      setError("The passwords do not match.");
+      return;
+    }
+    setBusy(true);
+    try { await onCreateAccount(username, email, password); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to create your account. Please try again."); }
+    finally { setBusy(false); }
+  };
+
+  return <div className="login-page">
+    <header className="site-header login-header"><a className="site-brand" href="/" onClick={(event) => { event.preventDefault(); onHome(); }}><span className="brand-mark"><Droplets size={20} /></span><span>AquaSat<small>WATER INTELLIGENCE</small></span></a><button className="login-home-link" onClick={onHome}>Back to home</button></header>
+    <main className="login-layout"><section className="login-aside"><span className="home-eyebrow"><i /> YOUR RESERVOIR VIEW, IN ONE PLACE</span><h1>Make the water picture easier to follow.</h1><p>Create an account to explore reported storage, satellite views, recent rainfall and the 15-day outlook for Chennai’s reservoirs.</p><div className="login-aside-points"><span><Droplets size={16} /> Updates for five reservoirs</span><span><Satellite size={16} /> Official readings alongside satellite estimates</span><span><CloudSun size={16} /> Rainfall context and a short-range outlook</span></div><div className="login-aside-water"><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /></div></section>
+      <section className="login-card"><span className="login-lock"><ShieldCheck size={20} /></span><span className="eyebrow">AQUASAT WORKSPACE</span><h2>Create account</h2><p>Choose a username, add your email, and create a password with at least 6 characters.</p>
+        {checking ? <div className="auth-message">Checking sign-in service…</div> : <form onSubmit={submit}>
+          <label htmlFor="aquasat-signup-username">Username</label><input id="aquasat-signup-username" name="username" type="text" autoComplete="username" minLength={3} maxLength={30} pattern="[A-Za-z0-9][A-Za-z0-9._-]{1,28}[A-Za-z0-9]" title="Use 3–30 letters, numbers, dots, underscores, or hyphens; begin and end with a letter or number." value={username} onChange={(event) => setUsername(event.target.value)} required />
+          <label htmlFor="aquasat-signup-email">Email</label><input id="aquasat-signup-email" name="email" type="email" autoComplete="email" maxLength={320} value={email} onChange={(event) => setEmail(event.target.value)} required />
+          <label htmlFor="aquasat-signup-password">Password</label><input id="aquasat-signup-password" name="new-password" type="password" autoComplete="new-password" minLength={6} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} required />
+          <label htmlFor="aquasat-confirm-password">Confirm password</label><input id="aquasat-confirm-password" name="confirm-password" type="password" autoComplete="new-password" minLength={6} maxLength={128} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required />
+          {(error || initialError) && <div className="auth-message error" role="alert">{error || initialError}</div>}
+          <button className="primary-cta login-submit" type="submit" disabled={busy}>{busy ? "Creating account…" : "Create account"}<ArrowRight size={16} /></button>
+        </form>}
+        <div className="auth-message">No email verification or password recovery is set up yet. Choose a password you can keep safe.</div>
+        <button className="login-back" onClick={onSignIn}>Already have an account? Sign in</button>
+      </section>
+    </main>
+    <footer className="login-footer">AquaSat · Chennai reservoir research</footer>
+  </div>;
+}
+
+function DashboardApp({ onLogout }: { onLogout: () => void }) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [rainfallCandidate, setRainfallCandidate] = useState<RainfallCandidateResult | null>(null);
   const [error, setError] = useState("");
@@ -86,19 +290,19 @@ function App() {
         </div>
         <div className="sidebar-spacer" />
         <div className="service-card"><div className="service-icon"><Database size={16} /></div><div><strong>{data?.data_status.database ?? "Data service"}</strong><small>{data?.data_status.last_synced_at_utc ? `Synced ${dateLabel(data.data_status.last_synced_at_utc, { day: "numeric", month: "short" })}` : "Waiting for API"}</small></div><span className={`service-dot ${error ? "offline" : ""}`} /></div>
-        <div className="sidebar-foot">ADVISORY RESEARCH DASHBOARD<br />CMWSSB · Sentinel-2 · IMD</div>
+        <div className="sidebar-foot">CHENNAI RESERVOIR OUTLOOK<br />Official updates · Satellite views · Rainfall</div>
       </aside>
 
       <main className="main-content">
-        <header className="topbar"><div className="breadcrumbs">AquaSat <span>/</span> Chennai <span>/</span> <b>{title}</b></div><div className="top-actions"><span className="live-badge"><span /> Research prototype</span><button className="icon-button" title="Refresh data" onClick={() => void refresh()} disabled={loading}><RefreshCw size={16} className={loading ? "spin" : ""} /></button><button className="avatar" aria-label="AquaSat">A</button></div></header>
+        <header className="topbar"><div className="breadcrumbs">AquaSat <span>/</span> Chennai <span>/</span> <b>{title}</b></div><div className="top-actions"><button className="icon-button" title="Refresh data" onClick={() => void refresh()} disabled={loading}><RefreshCw size={16} className={loading ? "spin" : ""} /></button><button className="logout-button" onClick={onLogout}><LogOut size={14} /> Sign out</button></div></header>
 
         <div className="content-wrap">
-          {error && <div className="error-banner"><AlertTriangle size={18} /><div><strong>Dashboard data could not load</strong><span>{error}. Start the FastAPI service and refresh. Your database and source CSV files are unchanged.</span></div><button onClick={() => void refresh()}>Retry</button></div>}
+          {error && <div className="error-banner" role="alert"><div><strong>We couldn’t load the latest reservoir update.</strong><span>Please check your connection and try again.</span></div><button onClick={() => void refresh()}>Try again</button></div>}
           <section className="page-heading"><div><div className="eyebrow"><span className="eyebrow-line" /> CHENNAI · TAMIL NADU</div><h1>{title}</h1><p>Satellite-derived storage estimates and short-range outlooks for five reservoirs.</p></div><div className="heading-meta"><span className="heading-meta-icon"><CalendarDays size={17} /></span><span><small>OFFICIAL READING THROUGH</small><b>{dateLabel(latest((data?.history ?? []).filter((row) => row.official_mcft != null))?.date)}</b></span></div></section>
 
           <div className="page-tabs">{nav.map(({ id, label }) => <button key={id} className={page === id ? "tab-active" : ""} onClick={() => setPage(id)}>{label}</button>)}</div>
 
-          {loading && !data ? <div className="loading-panel"><span className="loader" /><strong>Connecting to AquaSat data service…</strong><small>Fetching current dashboard history and forecast.</small></div> : data && <>
+          {loading && !data ? <div className="loading-panel"><span className="loader" /><strong>Connecting to AquaSat data service…</strong><small>Fetching current dashboard history and forecast.</small></div> : data && data.history.length === 0 ? <div className="loading-panel"><Database size={24} /><strong>No dashboard snapshot is in Neon yet.</strong><small>Import the reviewed dashboard files into Neon, then refresh this page.</small></div> : data && <>
             {overview && <Overview data={data} onChoose={(key) => { setSelected(key); setPage("reservoir"); }} />}
             {page === "reservoir" && <ReservoirDetail lake={selectedReservoir} rows={selectedHistory} forecast={selectedForecast} metric={metric} />}
             {page === "forecast" && <ForecastView lake={selectedReservoir} rows={selectedHistory} forecast={selectedForecast} />}
@@ -140,7 +344,7 @@ function Overview({ data, onChoose }: { data: DashboardData; onChoose: (key: str
       const forecastPct = forecast?.yhat == null ? null : forecast.yhat / lake.capacity * 100;
       return <button className="reservoir-card" key={lake.key} onClick={() => onChoose(lake.key)}><div className="card-top"><span className="card-code" style={{ color: lake.color, background: `${lake.color}16` }}>{lake.short}</span><span className={`status-pill ${low ? "low" : "normal"}`}><i />{low ? "Low" : "Normal"}</span></div><h3>{lake.name}</h3><div className="capacity-value">{fmt(pct, 0)}<small>%</small></div><div className="capacity-line"><span style={{ width: `${Math.max(2, Math.min(100, pct))}%`, background: lake.color }} /></div><div className="card-foot"><span>{fmt(reading?.official_mcft)} mcft</span><span>of {fmt(lake.capacity)}</span></div><div className="card-bottom"><span>Official · {dateLabel(reading?.date, { day: "numeric", month: "short" })}</span><span>{forecastPct == null ? "No forecast" : `Outlook ${fmt(forecastPct)}%`}</span></div></button>;
     })}</div>
-    <div className="content-grid two-col overview-charts"><div className="panel"><div className="panel-heading"><div><h2>Current storage</h2><p>Latest reported official volume by reservoir.</p></div><span className="legend-chip"><i className="legend-dot official" /> CMWSSB</span></div><div className="chart-area short"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={chart} margin={{ top: 10, right: 8, bottom: 0, left: -12 }}><CartesianGrid stroke="#e9efee" vertical={false} /><XAxis dataKey="reservoir" tick={{ fill: "#83918f", fontSize: 11 }} axisLine={false} tickLine={false} /><YAxis tick={{ fill: "#83918f", fontSize: 11 }} axisLine={false} tickLine={false} /><Tooltip formatter={(value) => [`${fmt(Number(value))} mcft`, "Official storage"]} contentStyle={{ borderRadius: 12, border: "1px solid #e3ebe8", boxShadow: "0 12px 32px #244c3e14" }} /><Line dataKey="storage" type="monotone" stroke="#17796f" strokeWidth={2.5} dot={{ r: 4, fill: "#17796f", strokeWidth: 0 }} connectNulls /></ComposedChart></ResponsiveContainer></div></div><div className="panel outlook-panel"><div className="panel-heading"><div><h2>Forecast snapshot</h2><p>Stored 15-day XGBoost endpoint, by lake.</p></div><span className="soft-tag"><Activity size={13} /> Model output</span></div><div className="mini-forecast-list">{summary.map(({ lake, forecast }) => <div className="mini-forecast" key={lake.key}><span className="lake-dot" style={{ background: lake.color }} /><span className="mini-name">{lake.name}</span><strong>{fmt(forecast?.yhat)} <small>mcft</small></strong><span className="mini-range">{forecast?.yhat_lower != null && forecast?.yhat_upper != null ? `${fmt(forecast.yhat_lower)}–${fmt(forecast.yhat_upper)}` : "range n/a"}</span></div>)}</div><div className="note-box"><AlertTriangle size={15} /><span>Forecast bands are approximate backtest-error ranges, not probabilities.</span></div></div></div>
+    <div className="content-grid two-col overview-charts"><div className="panel"><div className="panel-heading"><div><h2>Current storage</h2><p>Latest reported official volume by reservoir.</p></div><span className="legend-chip"><i className="legend-dot official" /> CMWSSB</span></div><div className="chart-area short"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={chart} margin={{ top: 10, right: 8, bottom: 0, left: -12 }}><CartesianGrid stroke="#e9efee" vertical={false} /><XAxis dataKey="reservoir" tick={{ fill: "#83918f", fontSize: 11 }} axisLine={false} tickLine={false} /><YAxis tick={{ fill: "#83918f", fontSize: 11 }} axisLine={false} tickLine={false} /><Tooltip formatter={(value) => [`${fmt(Number(value))} mcft`, "Official storage"]} contentStyle={{ borderRadius: 12, border: "1px solid #e3ebe8", boxShadow: "0 12px 32px #244c3e14" }} /><Line dataKey="storage" type="monotone" stroke="#17796f" strokeWidth={2.5} dot={{ r: 4, fill: "#17796f", strokeWidth: 0 }} connectNulls /></ComposedChart></ResponsiveContainer></div></div><div className="panel outlook-panel"><div className="panel-heading"><div><h2>Forecast snapshot</h2><p>Stored 15-day XGBoost endpoint, by lake.</p></div><span className="soft-tag"><Activity size={13} /> Model output</span></div><div className="mini-forecast-list">{summary.map(({ lake, forecast }) => <div className="mini-forecast" key={lake.key}><span className="lake-dot" style={{ background: lake.color }} /><span className="mini-name">{lake.name}</span><strong>{fmt(forecast?.yhat)} <small>mcft</small></strong><span className="mini-range">{forecast?.yhat_lower != null && forecast?.yhat_upper != null ? `${fmt(forecast.yhat_lower)}–${fmt(forecast.yhat_upper)}` : "range n/a"}</span></div>)}</div><div className="note-box"><span>The shaded range shows how forecasts have varied in past comparisons; it is not a probability.</span></div></div></div>
   </>;
 }
 
@@ -189,7 +393,7 @@ function ForecastView({ lake, rows, forecast }: { lake: typeof reservoirs[number
   const rainfallValues = end?.rainfall_source
     ? `${fmt(end.rainfall_7d_mm, 1)} / ${fmt(end.rainfall_30d_mm, 1)} / ${fmt(end.rainfall_90d_mm, 1)} mm · through ${dateLabel(end.rainfall_feature_through_date)}`
     : "Rainfall feature unavailable";
-  return <><div className="panel forecast-panel"><div className="panel-heading"><div><h2>{lake.name} · 15-day outlook</h2><p>Stored forecast from the project’s current XGBoost pipeline.</p></div><span className="soft-tag"><Activity size={13} /> {modelLabel}</span></div><div className="metric-strip three-col embedded"><Metric icon={Gauge} label="Forecast origin" value={`${fmt(startVal)} mcft`} note={dateLabel(origin?.date)} /><Metric icon={CalendarDays} label="Day-15 endpoint" value={`${fmt(end?.day15_prediction_mcft ?? end?.yhat)} mcft`} note={dateLabel(end?.ds)} /><Metric icon={delta != null && delta < 0 ? ArrowDownRight : ArrowUpRight} label="Change from origin" value={`${delta == null ? "—" : `${delta > 0 ? "+" : ""}${fmt(delta)} mcft`}`} note="Model estimate" tone={delta != null && delta < 0 ? "warning" : "good"} /></div><div className="forecast-provenance"><span><b>Satellite input</b>{end?.satellite_source ?? "No prior satellite estimate"}</span><span><b>Image date</b>{dateLabel(end?.satellite_feature_date)}</span><span><b>Image age</b>{end?.satellite_age_days == null ? "—" : String(Math.round(end.satellite_age_days)) + " days"}</span><span><b>GPM rainfall · 7 / 30 / 90 days</b>{rainfallValues}</span><span><b>Generated</b>{end?.generated_at_utc ? dateLabel(end.generated_at_utc) + " UTC" : "Timestamp unavailable"}</span></div><div className="chart-area forecast-chart"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={points} margin={{ top: 14, right: 12, bottom: 0, left: -10 }}><CartesianGrid stroke="#e9efee" vertical={false} /><XAxis dataKey="ds" tickFormatter={(value) => dateLabel(String(value), { day: "numeric", month: "short" })} minTickGap={30} tick={{ fill: "#83918f", fontSize: 10 }} axisLine={false} tickLine={false} /><YAxis tick={{ fill: "#83918f", fontSize: 11 }} axisLine={false} tickLine={false} /><Tooltip labelFormatter={(value) => dateLabel(String(value))} formatter={(value, name) => [`${fmt(Number(value))} mcft`, name === "actual" ? "Official origin" : name === "yhat" ? "Forecast" : name === "low" ? "Approx. lower range" : name === "high" ? "Approx. upper range" : "Range width"]} contentStyle={{ borderRadius: 12, border: "1px solid #e3ebe8" }} /><Area dataKey="low" name="low" stackId="range" type="monotone" stroke="none" fill="transparent" tooltipType="none" /><Area dataKey="band" name="band" stackId="range" type="monotone" stroke="none" fill="#d8e8e4" /><Line dataKey="actual" name="actual" stroke="#df8a4b" strokeWidth={2.5} dot={{ r: 4, fill: "#df8a4b", strokeWidth: 0 }} connectNulls /><Line dataKey="yhat" name="yhat" stroke="#16796f" strokeWidth={2.5} dot={false} connectNulls /></ComposedChart></ResponsiveContainer></div><div className="note-box"><AlertTriangle size={15} /><span>{end?.interval_method ?? "The forecast range is approximate and should not be interpreted as a calibrated probability interval."}</span></div><p className="muted-note">The model uses point-in-time official storage, the latest prior satellite estimate, and complete GPM 7-, 30-, and 90-day rainfall totals before the forecast origin. Rainfall is sampled at the nearest grid cell to each lake, not averaged over its catchment. Forecasts are advisory and do not replace CMWSSB figures.</p></div></>;
+  return <><div className="panel forecast-panel"><div className="panel-heading"><div><h2>{lake.name} · 15-day outlook</h2><p>Stored forecast from the project’s current XGBoost pipeline.</p></div><span className="soft-tag"><Activity size={13} /> {modelLabel}</span></div><div className="metric-strip three-col embedded"><Metric icon={Gauge} label="Forecast origin" value={`${fmt(startVal)} mcft`} note={dateLabel(origin?.date)} /><Metric icon={CalendarDays} label="Day-15 endpoint" value={`${fmt(end?.day15_prediction_mcft ?? end?.yhat)} mcft`} note={dateLabel(end?.ds)} /><Metric icon={delta != null && delta < 0 ? ArrowDownRight : ArrowUpRight} label="Change from origin" value={`${delta == null ? "—" : `${delta > 0 ? "+" : ""}${fmt(delta)} mcft`}`} note="Model estimate" tone={delta != null && delta < 0 ? "warning" : "good"} /></div><div className="forecast-provenance"><span><b>Satellite input</b>{end?.satellite_source ?? "No prior satellite estimate"}</span><span><b>Image date</b>{dateLabel(end?.satellite_feature_date)}</span><span><b>Image age</b>{end?.satellite_age_days == null ? "—" : String(Math.round(end.satellite_age_days)) + " days"}</span><span><b>GPM rainfall · 7 / 30 / 90 days</b>{rainfallValues}</span><span><b>Generated</b>{end?.generated_at_utc ? dateLabel(end.generated_at_utc) + " UTC" : "Timestamp unavailable"}</span></div><div className="chart-area forecast-chart"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={points} margin={{ top: 14, right: 12, bottom: 0, left: -10 }}><CartesianGrid stroke="#e9efee" vertical={false} /><XAxis dataKey="ds" tickFormatter={(value) => dateLabel(String(value), { day: "numeric", month: "short" })} minTickGap={30} tick={{ fill: "#83918f", fontSize: 10 }} axisLine={false} tickLine={false} /><YAxis tick={{ fill: "#83918f", fontSize: 11 }} axisLine={false} tickLine={false} /><Tooltip labelFormatter={(value) => dateLabel(String(value))} formatter={(value, name) => [`${fmt(Number(value))} mcft`, name === "actual" ? "Official origin" : name === "yhat" ? "Forecast" : name === "low" ? "Approx. lower range" : name === "high" ? "Approx. upper range" : "Range width"]} contentStyle={{ borderRadius: 12, border: "1px solid #e3ebe8" }} /><Area dataKey="low" name="low" stackId="range" type="monotone" stroke="none" fill="transparent" tooltipType="none" /><Area dataKey="band" name="band" stackId="range" type="monotone" stroke="none" fill="#d8e8e4" /><Line dataKey="actual" name="actual" stroke="#df8a4b" strokeWidth={2.5} dot={{ r: 4, fill: "#df8a4b", strokeWidth: 0 }} connectNulls /><Line dataKey="yhat" name="yhat" stroke="#16796f" strokeWidth={2.5} dot={false} connectNulls /></ComposedChart></ResponsiveContainer></div><div className="note-box"><span>{end?.interval_method ?? "The shaded range is an approximate guide based on past forecast errors."}</span></div><p className="muted-note">The model uses point-in-time official storage, the latest prior satellite estimate, and complete GPM 7-, 30-, and 90-day rainfall totals before the forecast origin. Rainfall is sampled at the nearest grid cell to each lake, not averaged over its catchment. Forecasts are advisory and do not replace CMWSSB figures.</p></div></>;
 }
 
 function Validation({ data, selected, rainfallCandidate }: { data: DashboardData; selected: string; rainfallCandidate: RainfallCandidateResult | null }) {
@@ -228,5 +432,3 @@ function Methodology({ data }: { data: DashboardData }) {
 function MethodStep({ number: n, title, text, icon: Icon }: { number: string; title: string; text: string; icon: typeof Waves }) {
   return <article className="method-step"><span className="step-number">{n}</span><span className="step-icon"><Icon size={18} /></span><h3>{title}</h3><p>{text}</p></article>;
 }
-
-export default App;
