@@ -1,4 +1,4 @@
-import type { DashboardData } from "./types";
+import type { DashboardData, RainfallCandidateResult } from "./types";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
@@ -29,4 +29,17 @@ export async function getDashboard(signal?: AbortSignal): Promise<DashboardData>
     throw new Error("Dashboard API response is missing history, forecasts, metrics, or database status.");
   }
   return dashboard as DashboardData;
+}
+
+export async function getRainfallCandidate(signal?: AbortSignal): Promise<RainfallCandidateResult> {
+  const response = await fetch(`${API_BASE}/api/v1/research/rainfall-candidate`, {
+    headers: { Accept: "application/json" },
+    signal,
+  });
+  if (!response.ok) throw new Error(`Rainfall research API returned ${response.status}`);
+  const result: unknown = await response.json();
+  if (typeof result !== "object" || result === null || !("development" in result) || !("september_october_2026" in result)) {
+    throw new Error("Rainfall research API returned an invalid result.");
+  }
+  return result as RainfallCandidateResult;
 }
