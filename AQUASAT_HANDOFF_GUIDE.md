@@ -83,8 +83,11 @@ The attached Streamlit screenshot showed an unavailable API while Streamlit fell
 | `GET /api/v1/reservoirs/{slug}/history` | One reservoir’s records, optionally bounded with `start_date` / `end_date`. |
 | `GET /api/v1/reservoirs/{slug}/forecast` | Stored forecast rows; expired rows are excluded unless explicitly requested. |
 | `GET /api/v1/data-status` | Database backend and imported source provenance. |
+| `GET /api/v1/research/rainfall-candidate` | Saved GPM rainfall candidate metrics, served separately from active forecast rows. |
 
 The API remains read-only from the browser: no public write, user-management, or arbitrary CSV-upload endpoint was added. A future scheduled job should run the reviewed extraction/build pipeline, validate its candidate outputs, promote approved CSVs, then perform the database import. Do not schedule a job that overwrites production data with unreviewed research candidates.
+
+The React **Results** page reads the saved GPM rainfall comparison from `rainfall_gpm_candidate_result.json` through the research route above. The comparison remains separate from active forecast rows, while the live generator uses the daily GPM rainfall series as a model feature.
 
 ### Commit-by-commit record
 
@@ -172,9 +175,18 @@ Latest active-dashboard status before the live model switch: official observatio
 
 - Daily rainfall comes from the official [IMD 0.25° NetCDF archive](https://imdpune.gov.in/cmpg/Griddata/Rainfall_25_NetCDF.html). `build_imd_rainfall.py` extracts the nearest grid cell to a representative reservoir-centre coordinate for each lake. It is a local rainfall proxy, not catchment-average rainfall; especially for Veeranam, local point rainfall should not be interpreted as catchment inflow.
 - `xgboost_forecasting.py` can optionally add antecedent 7-, 30-, and 90-day rainfall totals. The 2019 case study excludes the forecast-origin date and uses only earlier rainfall. No future or same-day rainfall is used.
-- The app has a separate **2019 rainfall study** tab. It displays daily rainfall beside official storage and compares the existing S2-first/S1-fallback XGBoost feature set against that set plus rainfall. This does not feed `reservoir_forecasts.csv` or change the live forecast.
-- On 33 comparable January–August 2019 targets, pooled RMSE was 193.57 mcft without rainfall and 195.52 mcft with rainfall (+1.95 mcft); capacity-normalized RMSE was 13.08% vs 13.22%. The forecast-origin date is excluded from rainfall windows. Individual lakes vary; this single historical crisis window does not support promoting rainfall into the live model.
+- The app retains a separate **2019 rainfall study** for the standard IMD archive. It is a different product from the merged GPM rainfall now used by the live model; do not use its score to describe the GPM feature.
+- On 33 comparable January–August 2019 targets, pooled RMSE was 193.57 mcft without rainfall and 195.52 mcft with rainfall (+1.95 mcft); capacity-normalized RMSE was 13.08% vs 13.22%. The forecast-origin date is excluded from rainfall windows. This result is for the older standard IMD archive and is not a validation of the separate merged GPM feature.
 - Rebuild the compact table and comparison with `python build_imd_rainfall.py --start-year 2016 --end-year 2019 --output rainfall_reservoir_daily_2016_2019.csv` followed by `python backtest_2019_rainfall.py`. Outputs are `rainfall_2019_crisis_predictions.csv` and `rainfall_2019_crisis_summary.csv`.
+
+### Separate merged GPM rainfall source audit (21 October 2026)
+
+- The standard IMD 0.25° NetCDF archive remains a distinct product capped at 2024. A separate IMD/NCMRWF merged gauge + GPM product is available as date-specific 0.25° binary grids. The official dataset paper describes 24-hour accumulated rainfall and availability on the IMD Pune website since 1 October 2015.
+- The daily binary endpoint was spot-checked for 1 October 2015 and 15 October 2019, 2025, and 2026; each file had the expected 241 × 281 float32 grid size and decoded to five reservoir-centre rainfall values. The annual NetCDF selector lists 2016–2022, but its 2022 download returned an empty file during this audit, so do not rely on that bulk route until it is independently verified.
+- The completed local nearest-cell series is `rainfall_gpm_2015_2026_to_2026-10-20_candidate.csv`: 20,190 rows across 4,038 complete days for five reservoirs, 1 October 2015–20 October 2026. The 21 October request returned an empty response, so 20 October is the latest available date found.
+- The live 15-day XGBoost now uses this series with official-storage history and the S2-first/S1-fallback satellite feature. For the current 16 October forecast origin, the most recent used rainfall is 15 October; same-day and future rain are excluded. Forecast generation stops if any requested 7-, 30-, or 90-day window is incomplete.
+- The pooled-v2 rainfall comparison remains separate and excludes satellite features. Its mixed score is not evidence that rainfall improves the active combined model. The displayed error range currently uses the older S2/S1-only rolling-origin errors as an explicitly labelled reference; it is not calibrated on the rainfall-assisted model. `backtest_15day_forecasts.py` supports a combined `xgboost_satellite_rainfall` backtest for longer evaluation.
+- The exact smoke-test, full-history, and same-row locked-holdout comparison commands are documented in [`docs/FORECAST_V2_CANDIDATE.md`](docs/FORECAST_V2_CANDIDATE.md). Do not merge this series with `rainfall_reservoir_daily_2016_2024.csv`; they are different rainfall products.
 
 ## 3. Important files and what each one means
 
@@ -242,10 +254,10 @@ Earth Engine describes `COPERNICUS/S1_GRD` as calibrated/orthorectified GRD back
 
 - **Forecast target:** future official CMWSSB storage in mcft.
 - **XGBoost baseline:** features from prior official storage history, recent changes/statistics, and calendar timing.
-- **Live XGBoost with satellite feature:** the same official-history features plus the latest calibrated satellite storage estimate available at the forecast origin. The combined history prefers S2 and fills a same-lake/date S2 gap with S1. The model does not train directly on water-area hectares, MNDWI, VV, or VH pixels.
+- **Live XGBoost with satellite and rainfall features:** official-history features, the latest calibrated prior S2-first/S1-fallback satellite estimate, and complete antecedent 7-, 30-, and 90-day merged GPM rainfall totals. The rainfall windows end one day before each forecast origin. The model does not train directly on water-area hectares, MNDWI, VV, or VH pixels.
 - **Prophet experiment:** uses official storage history to predict official storage. It is a comparison method, not the current dashboard generator.
 - `chennai_lakes_combined.csv` provides historical monthly changes for the seasonal baseline.
-- **The current dashboard forecast** is generated by `generate_live_xgboost_forecast.py` (also the default action of `forcast_reservoirs.py`) and saved in `reservoir_forecasts.csv`. The dashboard reads `dashboard_data.csv`, `metrics.csv`, and `reservoir_forecasts.csv`. The prior seasonal/damped-trend version is still available with `--model seasonal-baseline`.
+- **The current dashboard forecast** is generated by `generate_live_xgboost_forecast.py` (also the default action of `forcast_reservoirs.py`) and saved in `reservoir_forecasts.csv`. It reads official history, the combined satellite file, the merged GPM rainfall history, and a rolling-origin backtest file. The dashboard reads `dashboard_data.csv`, `metrics.csv`, and `reservoir_forecasts.csv`. The prior seasonal/damped-trend version is still available with `--model seasonal-baseline`.
 
 The 15-day backtest measures forecast error, not the accuracy of satellite water-area extraction. The S2/S1 storage holdout measures satellite calibration, not the skill of a 15-day forecast. Keep these two score types separate.
 

@@ -41,3 +41,25 @@
 - Pooled RMSE (mcft): persistence 251.2; seasonal 233.7; seasonal/damped trend 217.1; XGBoost 221.7; XGBoost with satellite lag 221.5; Prophet 675.6. Capacity-normalized RMSE for Prophet was 26.04%, versus 10.23% for seasonal/damped trend and 10.46% for XGBoost with satellite lag.
 - Prophet performed substantially worse and remains research-only. This comparison does not evaluate rainfall as a Prophet regressor and does not change the live forecast.
 - Detailed output: `forecast_backtest_prophet_2019_2024_candidate.csv` (344 rows). This was a user-run analysis; no code or live app output was changed for the comparison.
+
+## GPM rainfall candidate and window ablation (21 October 2026)
+
+- Built `rainfall_gpm_2015_2026_to_2026-10-10_candidate.csv`: 20,140 reservoir-day rows for five lakes, 1 October 2015–10 October 2026, with no missing site values. IMD returned an empty response for 11 October; the range was kept complete through 10 October rather than imputing zero rainfall. The saved forecast origins end 30 September, so the candidate covers their antecedent windows.
+- On identical baseline rows, the all-window (7/30/90-day) v2 comparison scored 444 development pairs and 10 recent pairs after excluding 93 disputed source pairs. Development pooled RMSE was 200.262 mcft without rain and 200.003 with all rainfall windows. Recent 10-pair RMSE was 194.056 without rain and 194.215 with all windows; no live update was made.
+- Added candidate-only `--rainfall-windows` and `--development-only` controls to compare individual windows while keeping model settings, origins, labels, and conflict exclusions fixed. On the 444 development pairs, pooled RMSE was 200.262 with no rainfall, 198.523 with 7-day rainfall, 200.402 with 30-day rainfall, and 199.984 with 90-day rainfall. The 7-day candidate's MAE was 117.607 mcft versus 117.271 without rainfall.
+- Scored the development-selected 7-day candidate once on the same 10 recent pairs: RMSE was 196.074 mcft versus 194.056 without rainfall, and MAE was 127.065 versus 125.174. The recent period had already been inspected for the combined-window experiment, so this is exploratory rather than a fresh independent holdout. Results are mixed by lake and do not establish a gain for the live combined model.
+- Runs used XGBoost 3.4.1 with `AQUASAT_XGB_DEVICE=cuda`. Python syntax compilation and CLI help checks passed. The live forecast and dashboard files were not changed.
+
+## Pooled v2 with Sentinel history (21 October 2026)
+
+- Added an optional candidate-only `--satellite` path to the pooled v2 backtest. It reuses the same combined Sentinel-2-first/Sentinel-1-gap-fill OOS history and point-in-time feature definitions as the existing XGBoost baseline; the standard v2 run remains unchanged when the option is omitted.
+- Compared both v2 variants on the same 454 forecast/actual pairs and same 93 disputed-pair exclusions. The 444 development pairs scored RMSE 200.262 mcft without satellite and 204.296 with satellite (MAE 117.271 vs 120.290). The 10 September–October 2026 pairs scored RMSE 194.056 without and 195.234 with satellite (MAE 125.174 vs 123.638). The recent block had been inspected in earlier work, so it is not a fresh independent holdout. The candidate does not justify changing the live forecast.
+- Satellite features were checked against the live XGBoost calculations for one historical anchor per lake; all four values matched. The backtest also validated every target against the same conflict-filtered official readings.
+- GPU run used XGBoost 3.4.1 with `AQUASAT_XGB_DEVICE=cuda`. Python syntax compilation and CLI help checks passed. Candidate outputs: `forecast_backtest_xgb_v2_satellite_candidate.csv` and `forecast_backtest_xgb_v2_satellite_summary_candidate.csv`. No live forecast, production model, or UI files were changed.
+
+## Live merged-GPM rainfall integration (21 October 2026)
+
+- Retrieved daily IMD/NCMRWF merged GPM grids for 11–20 October 2026 (50 site rows). The 21 October endpoint returned an empty response. The combined history now has 20,190 rows for five reservoirs over 4,038 complete dates, 1 October 2015–20 October 2026.
+- The live 15-day XGBoost path now includes complete antecedent 7-, 30-, and 90-day GPM totals along with official-storage history and the existing S2-first/S1-fallback satellite lag. Features exclude rainfall on the origin date and all dates after it. For the current 16 October official origin, used rainfall ends 15 October.
+- The pooled-v2 rain comparison is the saved quantitative comparison for the GPM feature; it did not include satellite features. Its recent 10-pair RMSE changed from 194.056 to 194.215 mcft (slightly higher), while MAE changed from 125.174 to 122.364 mcft. Do not present these figures as validation of the live combined model or as a broad accuracy gain.
+- Until a longer combined-model backtest is available, the displayed empirical forecast range uses the prior S2/S1-only rolling-origin errors and labels that source explicitly. The range is approximate, not rainfall-model calibration.
