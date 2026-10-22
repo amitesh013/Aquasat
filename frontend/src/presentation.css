@@ -34,3 +34,99 @@
 @media(max-width:1100px){.pipeline-steps{display:grid;grid-template-columns:1fr 1fr;gap:8px}.pipeline-arrow{display:none}.candidate-score-grid{grid-template-columns:1fr 1fr}.candidate-score:last-child{grid-column:1/-1}}
 @media(max-width:760px){.pipeline-panel{padding:17px;margin-bottom:22px}.pipeline-heading{display:grid}.api-connected{justify-self:start}.pipeline-steps{grid-template-columns:1fr;gap:7px}.pipeline-arrow{display:none}.pipeline-step{padding:9px}.candidate-score-grid{grid-template-columns:1fr}.candidate-score:last-child{grid-column:auto}.candidate-foot{display:grid}.forecast-provenance{grid-template-columns:1fr 1fr}.rainfall-candidate-panel{padding:15px}.rainfall-candidate-panel .panel-heading{display:grid}}
 @media print{.sidebar,.topbar,.page-tabs,.icon-button{display:none!important}.main-content{margin:0}.content-wrap{max-width:none;padding:16px}.pipeline-panel,.panel,.reservoir-card{break-inside:avoid;box-shadow:none}}
+
+/* Blue styling for the signed-in dashboard, matching the public pages. */
+.app-shell {
+  --ink: #102f4d;
+  --muted: #8095a5;
+  --line: #dce7ef;
+  --teal: #1769aa;
+  --cream: #f5f9fc;
+  background: #f5f9fc;
+  color: #163a56;
+}
+.app-shell .sidebar { background: #fbfdff; border-color: #dce7ef; }
+.app-shell .brand { color: #123853; }
+.app-shell .brand-mark { background: #e5f2fb; color: #1769aa; }
+.app-shell .brand small { color: #8298a8; }
+.app-shell .sidebar-label, .app-shell .sidebar-foot { color: #8298a8; }
+.app-shell .nav-link { color: #587389; }
+.app-shell .nav-link:hover, .app-shell .lake-nav-item:hover { background: #f0f6fa; color: #123853; }
+.app-shell .nav-link.active { background: #e5f2fb; color: #155f99; }
+.app-shell .lake-nav-item { color: #587389; }
+.app-shell .lake-nav-item.selected { background: #eef5fa; color: #214c69; }
+.app-shell .sidebar-divider { background: #dce7ef; }
+.app-shell .service-card { border-color: #dce7ef; }
+.app-shell .service-icon { background: #eaf3f9; color: #4d819e; }
+.app-shell .topbar { border-color: #dce7ef; }
+.app-shell .breadcrumbs { color: #8298a8; }
+.app-shell .breadcrumbs b { color: #345a72; }
+.app-shell .logout-button:hover { border-color: #91b9d2; color: #155f99; }
+.app-shell .content-wrap { color: #163a56; }
+.app-shell .eyebrow { color: #5884a1; }
+.app-shell .eyebrow-line { background: #3687b5; }
+.app-shell .page-heading h1 { color: #153d5a; }
+.app-shell .page-heading p, .app-shell .section-row p, .app-shell .panel-heading p { color: #718997; }
+.app-shell .heading-meta { border-color: #d5e4ed; }
+.app-shell .heading-meta-icon { background: #e7f2f9; color: #4d87aa; }
+.app-shell .heading-meta small { color: #8298a8; }
+.app-shell .page-tabs { border-color: #dce7ef; }
+.app-shell .page-tabs button { color: #718997; }
+.app-shell .page-tabs button.tab-active { color: #1769aa; border-color: #1769aa; }
+.app-shell .metric-icon { background: #e8f2f9; color: #2876a5; }
+.app-shell .metric-card { border-color: #dce7ef; box-shadow: 0 2px 5px #173f5b08; }
+.app-shell .metric-card strong { color: #214c69; }
+.app-shell .section-row h2, .app-shell .panel-heading h2 { color: #244e69; }
+.app-shell .text-button { color: #1769aa; }
+.app-shell .reservoir-card { border-color: #dce7ef; }
+.app-shell .reservoir-card:hover { border-color: #a8c9dc; box-shadow: 0 9px 22px #14425f10; }
+.app-shell .capacity-value { color: #153d5a; }
+.app-shell .capacity-line { background: #e9f0f4; }
+.app-shell .panel { border-color: #dce7ef; box-shadow: 0 2px 5px #173f5b08; }
+.app-shell .legend-chip, .app-shell .soft-tag { border-color: #e3edf3; background: #f7fafc; color: #718997; }
+.app-shell .legend-dot.satellite { background: #3988b5; }
+.app-shell .mini-forecast { border-color: #e9f0f4; }
+.app-shell .mini-name { color: #587389; }
+.app-shell .mini-forecast strong { color: #244e69; }
+.app-shell .mini-range { color: #8298a8; }
+.app-shell .note-box { border-color: #d6e7f1; background: #edf6fb; color: #5f7b8d; }
+.app-shell .loading-panel { color: #527b95; }
+.app-shell .loader { border-color: #deebf3; border-top-color: #1769aa; }
+.app-shell .quality-value { color: #214c69; }
+.app-shell .quality-panel>svg, .app-shell .panel-heading>svg { color: #4d87aa; }
+.app-shell .quality-rows div { border-color: #e8eff4; }
+.app-shell .quality-rows b { color: #345a72; }
+.app-shell .validation-intro { border-color: #d6e7f1; background: linear-gradient(120deg, #edf6fb, #fff); }
+.app-shell .callout-icon { background: #e3f0f8; color: #2876a5; }
+.app-shell .validation-intro p { color: #718997; }
+.app-shell th { background: #f3f8fb; }
+.app-shell td { border-color: #e8eff4; color: #587389; }
+.app-shell tr.row-selected td { background: #f1f7fb; }
+.app-shell .soft-tag svg { color: #3988b5; }
+.app-shell .method-banner { border-color: #d6e7f1; background: linear-gradient(120deg, #eaf4fa, #f7fafc); }
+.app-shell .method-banner-icon, .app-shell .step-icon { background: #e4f1f8; color: #2876a5; }
+.app-shell .method-banner p, .app-shell .method-step p { color: #718997; }
+.app-shell .method-step { border-color: #dce7ef; }
+.app-shell .method-step h3 { color: #244e69; }
+.app-shell .app-footer { border-color: #dce7ef; color: #8298a8; }
+.app-shell .footer-dot { background: #3988b5; }
+
+/* The data-flow panel is also blue; green connection indicators retain their status meaning. */
+.pipeline-panel { border-color: #173f62; background: linear-gradient(120deg, #0d3457 0%, #13517c 62%, #1b6894 100%); }
+.pipeline-heading .eyebrow { color: #a9cce0; }
+.pipeline-arrow { color: #9bc8df; }
+.pipeline-branch { color: #c2dce9; }
+.forecast-provenance { border-color: #dce7ef; background: #f3f8fb; }
+.forecast-provenance span { color: #345a72; }
+.forecast-provenance b { color: #7894a5; }
+.pipeline-inline { background: #f1f7fb; color: #587b91; }
+.pipeline-inline span { border-color: #dce7ef; color: #345a72; }
+.candidate-feature-line span { border-color: #dce7ef; background: #f7fafc; color: #718997; }
+.candidate-score { border-color: #dce7ef; background: linear-gradient(155deg, #fbfdff, #f1f7fb); }
+.candidate-score.recent { border-color: #e9e1d4; background: linear-gradient(155deg, #fffdf9, #fbf6ed); }
+.candidate-score strong { color: #244e69; }
+.candidate-score small { color: #587389; }
+
+@media(max-width:760px) {
+  .app-shell .sidebar { background: #fbfdff; }
+}
