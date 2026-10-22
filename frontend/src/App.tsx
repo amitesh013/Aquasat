@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   Activity, ArrowDownRight, ArrowUpRight, BarChart3,
   ArrowRight, CalendarDays, ChevronDown, CircleHelp, CloudSun, Database,
-  Droplets, Gauge, Layers3, LogOut, RefreshCw, Satellite, ShieldCheck, Waves,
+  Droplets, Gauge, Layers3, LogOut, Moon, RefreshCw, Satellite, ShieldCheck, Sun, Waves,
 } from "lucide-react";
 import {
   Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer,
@@ -40,6 +40,17 @@ function latest<T extends { date?: string; ds?: string }>(rows: T[]) {
 }
 
 type SiteRoute = "home" | "login" | "signup" | "dashboard";
+type Theme = "light" | "dark";
+
+function initialTheme(): Theme {
+  try {
+    const saved = window.localStorage.getItem("aquasat-theme");
+    if (saved === "light" || saved === "dark") return saved;
+  } catch {
+    // Continue with the system preference if browser storage is unavailable.
+  }
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
 
 function routeFromPath(pathname: string): SiteRoute {
   if (pathname.startsWith("/dashboard")) return "dashboard";
@@ -55,9 +66,17 @@ function goTo(path: string) {
 
 export default function App() {
   const [route, setRoute] = useState<SiteRoute>(() => routeFromPath(window.location.pathname));
+  const [theme, setTheme] = useState<Theme>(initialTheme);
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [checkingAuth, setCheckingAuth] = useState(false);
   const [authError, setAuthError] = useState("");
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    try { window.localStorage.setItem("aquasat-theme", theme); } catch { /* Theme still applies for this visit. */ }
+  }, [theme]);
+
+  const toggleTheme = () => setTheme((current) => current === "light" ? "dark" : "light");
 
   useEffect(() => {
     const onPopState = () => setRoute(routeFromPath(window.location.pathname));
@@ -84,9 +103,11 @@ export default function App() {
     return () => { active = false; };
   }, [route]);
 
-  if (route === "home") return <HomePage onSignIn={() => goTo("/login")} onCreateAccount={() => goTo("/signup")} />;
+  if (route === "home") return <HomePage theme={theme} onToggleTheme={toggleTheme} onSignIn={() => goTo("/login")} onCreateAccount={() => goTo("/signup")} />;
   if (route === "login") {
     return <LoginPage
+      theme={theme}
+      onToggleTheme={toggleTheme}
       checking={checkingAuth}
       initialError={authError}
       onSignIn={async (username, password) => { await signIn(username, password); goTo("/dashboard"); }}
@@ -96,6 +117,8 @@ export default function App() {
   }
   if (route === "signup") {
     return <SignUpPage
+      theme={theme}
+      onToggleTheme={toggleTheme}
       checking={checkingAuth}
       initialError={authError}
       onCreateAccount={async (username, email, password) => { await createAccount(username, email, password); goTo("/dashboard"); }}
@@ -105,20 +128,28 @@ export default function App() {
   }
   if (checkingAuth || !auth) return <div className="site-loading"><span className="loader" /><strong>Checking your AquaSat access…</strong>{authError && <small>{authError}</small>}</div>;
   if (!auth.authenticated) return <LoginPage
+    theme={theme}
+    onToggleTheme={toggleTheme}
     checking={false}
     initialError={authError}
     onSignIn={async (username, password) => { await signIn(username, password); goTo("/dashboard"); }}
     onCreateAccount={() => goTo("/signup")}
     onHome={() => goTo("/")}
   />;
-  return <DashboardApp onLogout={async () => { await signOut().catch(() => undefined); goTo("/"); }} />;
+  return <DashboardApp theme={theme} onToggleTheme={toggleTheme} onLogout={async () => { await signOut().catch(() => undefined); goTo("/"); }} />;
 }
 
-function HomePage({ onSignIn, onCreateAccount }: { onSignIn: () => void; onCreateAccount: () => void }) {
+function ThemeToggle({ theme, onToggle }: { theme: Theme; onToggle: () => void }) {
+  const label = theme === "light" ? "Switch to dark mode" : "Switch to light mode";
+  const Icon = theme === "light" ? Moon : Sun;
+  return <button className="theme-toggle" type="button" onClick={onToggle} aria-label={label} aria-pressed={theme === "dark"} title={label}><Icon size={16} /><span>{theme === "light" ? "Dark" : "Light"}</span></button>;
+}
+
+function HomePage({ theme, onToggleTheme, onSignIn, onCreateAccount }: { theme: Theme; onToggleTheme: () => void; onSignIn: () => void; onCreateAccount: () => void }) {
   return <div className="site-home">
     <header className="site-header">
       <a className="site-brand" href="/" onClick={(event) => { event.preventDefault(); goTo("/"); }}><span className="brand-mark"><Droplets size={20} /></span><span>AquaSat<small>WATER INTELLIGENCE</small></span></a>
-      <nav aria-label="Public navigation"><a href="#how-it-works">How it works</a><button className="site-create-account" onClick={onCreateAccount}>Create account</button><button className="site-signin" onClick={onSignIn}>Sign in <ArrowRight size={15} /></button></nav>
+      <nav aria-label="Public navigation"><a href="#how-it-works">How it works</a><button className="site-create-account" onClick={onCreateAccount}>Create account</button><ThemeToggle theme={theme} onToggle={onToggleTheme} /><button className="site-signin" onClick={onSignIn}>Sign in <ArrowRight size={15} /></button></nav>
     </header>
     <main>
       <section className="home-hero">
@@ -156,7 +187,9 @@ function HomePage({ onSignIn, onCreateAccount }: { onSignIn: () => void; onCreat
   </div>;
 }
 
-function LoginPage({ checking, initialError, onSignIn, onCreateAccount, onHome }: {
+function LoginPage({ theme, onToggleTheme, checking, initialError, onSignIn, onCreateAccount, onHome }: {
+  theme: Theme;
+  onToggleTheme: () => void;
   checking: boolean;
   initialError: string;
   onSignIn: (username: string, password: string) => Promise<void>;
@@ -178,7 +211,7 @@ function LoginPage({ checking, initialError, onSignIn, onCreateAccount, onHome }
   };
 
   return <div className="login-page">
-    <header className="site-header login-header"><a className="site-brand" href="/" onClick={(event) => { event.preventDefault(); onHome(); }}><span className="brand-mark"><Droplets size={20} /></span><span>AquaSat<small>WATER INTELLIGENCE</small></span></a><button className="login-home-link" onClick={onHome}>Back to home</button></header>
+    <header className="site-header login-header"><a className="site-brand" href="/" onClick={(event) => { event.preventDefault(); onHome(); }}><span className="brand-mark"><Droplets size={20} /></span><span>AquaSat<small>WATER INTELLIGENCE</small></span></a><div className="login-header-actions"><ThemeToggle theme={theme} onToggle={onToggleTheme} /><button className="login-home-link" onClick={onHome}>Back to home</button></div></header>
     <main className="login-layout"><section className="login-aside"><span className="home-eyebrow"><i /> CHENNAI RESERVOIRS, MADE CLEARER</span><h1>See where water stands and what may come next.</h1><p>AquaSat brings reservoir updates, satellite views, recent rainfall and a 15-day outlook together in one easy-to-follow place.</p><div className="login-aside-points"><span><Droplets size={16} /> Follow storage across five reservoirs</span><span><Satellite size={16} /> Compare official updates with satellite views</span><span><CloudSun size={16} /> See recent rainfall beside the outlook</span></div><div className="login-aside-water"><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /></div></section>
       <section className="login-card"><span className="login-lock"><ShieldCheck size={20} /></span><span className="eyebrow">AQUASAT WORKSPACE</span><h2>Welcome back</h2><p>Sign in with your dashboard account.</p>
         {checking ? <div className="auth-message">Checking sign-in service…</div> : <form onSubmit={submit}>
@@ -195,7 +228,9 @@ function LoginPage({ checking, initialError, onSignIn, onCreateAccount, onHome }
   </div>;
 }
 
-function SignUpPage({ checking, initialError, onCreateAccount, onSignIn, onHome }: {
+function SignUpPage({ theme, onToggleTheme, checking, initialError, onCreateAccount, onSignIn, onHome }: {
+  theme: Theme;
+  onToggleTheme: () => void;
   checking: boolean;
   initialError: string;
   onCreateAccount: (username: string, email: string, password: string) => Promise<void>;
@@ -223,7 +258,7 @@ function SignUpPage({ checking, initialError, onCreateAccount, onSignIn, onHome 
   };
 
   return <div className="login-page">
-    <header className="site-header login-header"><a className="site-brand" href="/" onClick={(event) => { event.preventDefault(); onHome(); }}><span className="brand-mark"><Droplets size={20} /></span><span>AquaSat<small>WATER INTELLIGENCE</small></span></a><button className="login-home-link" onClick={onHome}>Back to home</button></header>
+    <header className="site-header login-header"><a className="site-brand" href="/" onClick={(event) => { event.preventDefault(); onHome(); }}><span className="brand-mark"><Droplets size={20} /></span><span>AquaSat<small>WATER INTELLIGENCE</small></span></a><div className="login-header-actions"><ThemeToggle theme={theme} onToggle={onToggleTheme} /><button className="login-home-link" onClick={onHome}>Back to home</button></div></header>
     <main className="login-layout"><section className="login-aside"><span className="home-eyebrow"><i /> YOUR RESERVOIR VIEW, IN ONE PLACE</span><h1>Make the water picture easier to follow.</h1><p>Create an account to explore reported storage, satellite views, recent rainfall and the 15-day outlook for Chennai’s reservoirs.</p><div className="login-aside-points"><span><Droplets size={16} /> Updates for five reservoirs</span><span><Satellite size={16} /> Official readings alongside satellite estimates</span><span><CloudSun size={16} /> Rainfall context and a short-range outlook</span></div><div className="login-aside-water"><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /></div></section>
       <section className="login-card"><span className="login-lock"><ShieldCheck size={20} /></span><span className="eyebrow">AQUASAT WORKSPACE</span><h2>Create account</h2><p>Choose a username, add your email, and create a password with at least 6 characters.</p>
         {checking ? <div className="auth-message">Checking sign-in service…</div> : <form onSubmit={submit}>
@@ -242,7 +277,7 @@ function SignUpPage({ checking, initialError, onCreateAccount, onSignIn, onHome 
   </div>;
 }
 
-function DashboardApp({ onLogout }: { onLogout: () => void }) {
+function DashboardApp({ theme, onToggleTheme, onLogout }: { theme: Theme; onToggleTheme: () => void; onLogout: () => void }) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [rainfallCandidate, setRainfallCandidate] = useState<RainfallCandidateResult | null>(null);
   const [error, setError] = useState("");
@@ -294,7 +329,7 @@ function DashboardApp({ onLogout }: { onLogout: () => void }) {
       </aside>
 
       <main className="main-content">
-        <header className="topbar"><div className="breadcrumbs">AquaSat <span>/</span> Chennai <span>/</span> <b>{title}</b></div><div className="top-actions"><button className="icon-button" title="Refresh data" onClick={() => void refresh()} disabled={loading}><RefreshCw size={16} className={loading ? "spin" : ""} /></button><button className="logout-button" onClick={onLogout}><LogOut size={14} /> Sign out</button></div></header>
+        <header className="topbar"><div className="breadcrumbs">AquaSat <span>/</span> Chennai <span>/</span> <b>{title}</b></div><div className="top-actions"><ThemeToggle theme={theme} onToggle={onToggleTheme} /><button className="icon-button" title="Refresh data" onClick={() => void refresh()} disabled={loading}><RefreshCw size={16} className={loading ? "spin" : ""} /></button><button className="logout-button" onClick={onLogout}><LogOut size={14} /> Sign out</button></div></header>
 
         <div className="content-wrap">
           {error && <div className="error-banner" role="alert"><div><strong>We couldn’t load the latest reservoir update.</strong><span>Please check your connection and try again.</span></div><button onClick={() => void refresh()}>Try again</button></div>}
