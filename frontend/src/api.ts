@@ -15,6 +15,16 @@ async function responseError(response: Response, fallback: string): Promise<Erro
   try {
     const payload = await response.json();
     if (typeof payload.detail === "string") message = payload.detail;
+    else if (Array.isArray(payload.detail)) {
+      const issues = payload.detail.map((entry: unknown) => {
+        if (!entry || typeof entry !== "object") return "";
+        const issue = entry as { loc?: unknown; msg?: unknown };
+        const field = Array.isArray(issue.loc) ? issue.loc.at(-1) : null;
+        const detail = typeof issue.msg === "string" ? issue.msg : "Invalid value";
+        return `${typeof field === "string" ? `${field}: ` : ""}${detail}`;
+      }).filter(Boolean);
+      if (issues.length) message = `${fallback} (${response.status}): ${issues.join("; ")}`;
+    }
   } catch {
     // Keep the useful HTTP status when the response is not JSON.
   }
@@ -45,7 +55,8 @@ export async function signIn(username: string, password: string): Promise<void> 
     method: "POST",
     headers: { Accept: "application/json", "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ username, password }),
+    // Keep the prior API field during rollout; newer API versions use `username`.
+    body: JSON.stringify({ username, username_or_email: username, password }),
   });
   if (!response.ok) throw await responseError(response, "Sign-in failed");
 }
