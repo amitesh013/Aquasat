@@ -150,8 +150,8 @@ def _no_store(response: Response) -> None:
     response.headers["Cache-Control"] = "no-store"
 
 
-class AccountRequest(BaseModel):
-    username_or_email: str = Field(min_length=3, max_length=320)
+class LoginRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=30)
     password: str = Field(min_length=1, max_length=128)
 
 
@@ -258,26 +258,20 @@ def register(credentials: RegistrationRequest, response: Response) -> dict:
 
 
 @app.post("/api/v1/auth/login", tags=["auth"])
-def login(credentials: AccountRequest, response: Response) -> dict:
-    identifier = credentials.username_or_email.strip().casefold()
-    if "@" in identifier:
-        if len(identifier) > 320 or not _EMAIL_RE.fullmatch(identifier):
-            _verify_password(_DUMMY_PASSWORD_HASH, credentials.password)
-            raise HTTPException(status_code=401, detail="Username/email or password is incorrect.")
-        lookup = auth_user_table.c.email == identifier
-    else:
-        if not _USERNAME_RE.fullmatch(identifier):
-            _verify_password(_DUMMY_PASSWORD_HASH, credentials.password)
-            raise HTTPException(status_code=401, detail="Username/email or password is incorrect.")
-        lookup = auth_user_table.c.username == identifier
+def login(credentials: LoginRequest, response: Response) -> dict:
+    username = credentials.username.strip().casefold()
+    if not _USERNAME_RE.fullmatch(username):
+        _verify_password(_DUMMY_PASSWORD_HASH, credentials.password)
+        raise HTTPException(status_code=401, detail="Username or password is incorrect.")
+    lookup = auth_user_table.c.username == username
 
     with get_engine().begin() as connection:
         user = connection.execute(select(auth_user_table).where(lookup)).mappings().first()
         if user is None:
             _verify_password(_DUMMY_PASSWORD_HASH, credentials.password)
-            raise HTTPException(status_code=401, detail="Username/email or password is incorrect.")
+            raise HTTPException(status_code=401, detail="Username or password is incorrect.")
         if not _verify_password(user["password_hash"], credentials.password) or not user["is_active"]:
-            raise HTTPException(status_code=401, detail="Username/email or password is incorrect.")
+            raise HTTPException(status_code=401, detail="Username or password is incorrect.")
 
         if PASSWORD_HASHER.check_needs_rehash(user["password_hash"]):
             connection.execute(

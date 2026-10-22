@@ -41,7 +41,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\run_react.ps1
 ```
 
-Copy `.env.example` to `.env` and set `DATABASE_URL` to the Neon PostgreSQL connection string. Run `run_react.ps1`; it migrates Neon before starting FastAPI and Vite. Open `http://127.0.0.1:5173/signup` to create an account with a unique username, email, and password of at least six characters. Sign in at `/login` with the username or email and password; the protected dashboard is at `/dashboard`. Account creation stores a password hash and a revocable session in Neon. The reviewed dashboard snapshot is imported separately with `python sync_aquasat_database.py` when authorized. API documentation is at `http://127.0.0.1:8765/docs`.
+Copy `.env.example` to `.env` and set `DATABASE_URL` to the Neon PostgreSQL connection string. Run `run_react.ps1`; it migrates Neon before starting FastAPI and Vite. Open `http://127.0.0.1:5173/signup` to create an account with a unique username, email, and password of at least six characters. Sign in at `/login` with the username and password; the protected dashboard is at `/dashboard`. Account creation stores a password hash and a revocable session in Neon. The reviewed dashboard snapshot is imported separately with `python sync_aquasat_database.py` when authorized. API documentation is at `http://127.0.0.1:8765/docs`.
 
 If running services separately, use two PowerShell windows:
 
@@ -81,8 +81,8 @@ Authentication routes are public so visitors can create an account, sign in, che
 |---|---|
 | `GET /health` | Service and Neon database connectivity. |
 | `GET /api/v1/auth/status` | Returns whether the visitor has a valid account session. |
-| `POST /api/v1/auth/register` | Creates an email/password account and signs in. |
-| `POST /api/v1/auth/login` | Verifies account credentials and issues an HTTP-only session cookie. |
+| `POST /api/v1/auth/register` | Creates an account using username, email, and password, then signs in. |
+| `POST /api/v1/auth/login` | Verifies username and password, then issues an HTTP-only session cookie. |
 | `POST /api/v1/auth/logout` | Revokes the server-side session and clears the cookie. |
 | `GET /api/v1/dashboard` | Current observation history, forecast rows, calibration metrics, and data status for React. |
 | `GET /api/v1/reservoirs` | Five reservoir IDs, names, capacities, and latest observation date. |

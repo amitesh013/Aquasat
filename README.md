@@ -12,9 +12,9 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\run_react.ps1
 ```
 
-Open `http://127.0.0.1:5173`. The launcher applies database migrations, starts FastAPI at `http://127.0.0.1:8765`, and runs the Vite development server. It does not re-upload source files every time the app starts. Create an account with a unique username, email, and password of at least 6 characters; then sign in with your username (or email) and password. Stop it with Ctrl+C. The API schema is at `http://127.0.0.1:8765/docs`.
+Open `http://127.0.0.1:5173`. The launcher applies database migrations, starts FastAPI at `http://127.0.0.1:8765`, and runs the Vite development server. It does not re-upload source files every time the app starts. Create an account with a unique username, email, and password of at least 6 characters; then sign in with your username and password. Stop it with Ctrl+C. The API schema is at `http://127.0.0.1:8765/docs`.
 
-Open `/signup` to create an account with a unique username, email, and password of at least 6 characters. Existing accounts receive a username based on their email when the new migration runs and can continue signing in with either username or email. Every account can view the same read-only research dashboard.
+Open `/signup` to create an account with a unique username, email, and password of at least 6 characters. Existing accounts receive a username based on their email when the new migration runs; sign in using that username and password. Every account can view the same read-only research dashboard.
 
 ## Deploy with Docker
 

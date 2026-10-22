@@ -40,12 +40,12 @@ export async function createAccount(username: string, email: string, password: s
   if (!response.ok) throw await responseError(response, "Could not create account");
 }
 
-export async function signIn(usernameOrEmail: string, password: string): Promise<void> {
+export async function signIn(username: string, password: string): Promise<void> {
   const response = await fetch(`${API_BASE}/api/v1/auth/login`, {
     method: "POST",
     headers: { Accept: "application/json", "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ username_or_email: usernameOrEmail, password }),
+    body: JSON.stringify({ username, password }),
   });
   if (!response.ok) throw await responseError(response, "Sign-in failed");
 }

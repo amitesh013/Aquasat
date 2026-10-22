@@ -89,7 +89,7 @@ export default function App() {
     return <LoginPage
       checking={checkingAuth}
       initialError={authError}
-      onSignIn={async (usernameOrEmail, password) => { await signIn(usernameOrEmail, password); goTo("/dashboard"); }}
+      onSignIn={async (username, password) => { await signIn(username, password); goTo("/dashboard"); }}
       onCreateAccount={() => goTo("/signup")}
       onHome={() => goTo("/")}
     />;
@@ -107,7 +107,7 @@ export default function App() {
   if (!auth.authenticated) return <LoginPage
     checking={false}
     initialError={authError}
-    onSignIn={async (usernameOrEmail, password) => { await signIn(usernameOrEmail, password); goTo("/dashboard"); }}
+    onSignIn={async (username, password) => { await signIn(username, password); goTo("/dashboard"); }}
     onCreateAccount={() => goTo("/signup")}
     onHome={() => goTo("/")}
   />;
@@ -159,11 +159,11 @@ function HomePage({ onSignIn, onCreateAccount }: { onSignIn: () => void; onCreat
 function LoginPage({ checking, initialError, onSignIn, onCreateAccount, onHome }: {
   checking: boolean;
   initialError: string;
-  onSignIn: (usernameOrEmail: string, password: string) => Promise<void>;
+  onSignIn: (username: string, password: string) => Promise<void>;
   onCreateAccount: () => void;
   onHome: () => void;
 }) {
-  const [usernameOrEmail, setUsernameOrEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -172,7 +172,7 @@ function LoginPage({ checking, initialError, onSignIn, onCreateAccount, onHome }
     event.preventDefault();
     setBusy(true);
     setError("");
-    try { await onSignIn(usernameOrEmail, password); }
+    try { await onSignIn(username, password); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to sign in. Please try again."); }
     finally { setBusy(false); }
   };
@@ -182,7 +182,7 @@ function LoginPage({ checking, initialError, onSignIn, onCreateAccount, onHome }
     <main className="login-layout"><section className="login-aside"><span className="home-eyebrow"><i /> CHENNAI RESERVOIRS, MADE CLEARER</span><h1>See where water stands and what may come next.</h1><p>AquaSat brings reservoir updates, satellite views, recent rainfall and a 15-day outlook together in one easy-to-follow place.</p><div className="login-aside-points"><span><Droplets size={16} /> Follow storage across five reservoirs</span><span><Satellite size={16} /> Compare official updates with satellite views</span><span><CloudSun size={16} /> See recent rainfall beside the outlook</span></div><div className="login-aside-water"><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /></div></section>
       <section className="login-card"><span className="login-lock"><ShieldCheck size={20} /></span><span className="eyebrow">AQUASAT WORKSPACE</span><h2>Welcome back</h2><p>Sign in with your dashboard account.</p>
         {checking ? <div className="auth-message">Checking sign-in service…</div> : <form onSubmit={submit}>
-          <label htmlFor="aquasat-username">Username or email</label><input id="aquasat-username" name="username_or_email" type="text" autoComplete="username" minLength={3} maxLength={320} value={usernameOrEmail} onChange={(event) => setUsernameOrEmail(event.target.value)} required />
+          <label htmlFor="aquasat-username">Username</label><input id="aquasat-username" name="username" type="text" autoComplete="username" minLength={3} maxLength={30} value={username} onChange={(event) => setUsername(event.target.value)} required />
           <label htmlFor="aquasat-password">Password</label><input id="aquasat-password" name="password" type="password" autoComplete="current-password" maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} required />
           {(error || initialError) && <div className="auth-message error" role="alert">{error || initialError}</div>}
           <button className="primary-cta login-submit" type="submit" disabled={busy}>{busy ? "Signing in…" : "Sign in securely"}<ArrowRight size={16} /></button>
