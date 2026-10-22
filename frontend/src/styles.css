@@ -77,6 +77,7 @@
 .site-home .visual-chart-card>div:first-child span { color: #7894a5; }
 .site-home .visual-chart-card>div:first-child strong { color: #214c69; }
 .site-home .visual-chart-status { background: #e9f3fa; color: #397297; }
+.site-home .visual-chart-card svg stop { stop-color: #4290be; }
 .site-home .visual-chart-card svg path[stroke] { stroke: #1a73ad; }
 .site-home .visual-chart-card svg circle { fill: #1a73ad; }
 .site-home .visual-chart-card svg path:last-child { stroke: #d7e6ee; }
