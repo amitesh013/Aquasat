@@ -36,3 +36,123 @@
   .approach-grid article { min-height: 0; }
   .login-aside > p { font-size: 12px; }
 }
+
+/* Blue public-site styling adapted from the supplied UI concept.
+   Keep the existing AquaSat page structure and real auth flow intact. */
+.site-home {
+  --ink: #102f4d;
+  --teal: #1769aa;
+  color: #163a56;
+  background:
+    radial-gradient(circle at 84% 9%, #e0eff9 0, transparent 25%),
+    linear-gradient(180deg, #f7fafc 0%, #f3f8fb 62%, #fff 100%);
+}
+.site-home .site-brand { color: #123853; }
+.site-home .site-brand small { color: #8298a8; }
+.site-home .brand-mark { background: #e5f2fb; color: #1769aa; }
+.site-home .site-header nav>a { color: #5d7588; }
+.site-home .site-signin { border-color: #cfdfeb; color: #155f99; box-shadow: 0 5px 14px #164e7508; }
+.site-home .site-signin:hover { color: #0c4f82; border-color: #91b9d2; }
+.site-home .site-create-account { color: #1769aa; }
+.site-home .site-create-account:hover { color: #0c4f82; }
+.site-home .home-eyebrow { color: #3479a7; }
+.site-home .home-eyebrow i { background: #2b83bc; box-shadow: 0 0 0 4px #dfedf7; }
+.site-home .home-copy h1 { color: #102f4d; }
+.site-home .home-copy h1 em { color: #1b71ad; }
+.site-home .home-copy>p { color: #60798a; }
+.site-home .primary-cta { background: linear-gradient(135deg, #1a75b8, #125b9a); box-shadow: 0 12px 26px #1769aa28; }
+.site-home .primary-cta:hover { background: linear-gradient(135deg, #14649f, #0e4e84); }
+.site-home .home-actions>a { color: #657d8e; }
+.site-home .home-actions>a:hover { color: #1769aa; }
+.site-home .home-coverage { color: #718697; }
+.site-home .home-coverage b { color: #153e60; }
+.site-home .home-visual { border-color: #bcd8e8; background: linear-gradient(145deg, #0f4b77, #176f9f); box-shadow: 0 34px 78px #124b7224; }
+.site-home .visual-topline { color: #c9e5f2; }
+.site-home .visual-topline i, .site-home .visual-chart-status i { background: #83d6d1; }
+.site-home .visual-water { background: linear-gradient(180deg, #cde6f1 0%, #87bdd0 58%, #478fa6 100%); }
+.site-home .visual-sun { background: #f2d185; box-shadow: 0 0 0 17px #f2d18526; }
+.site-home .hill-one { background: linear-gradient(125deg, #74adad, #438a94); }
+.site-home .hill-two { background: linear-gradient(130deg, #76aebc, #286e87); }
+.site-home .visual-chart-card { border-color: #d4e3ed; box-shadow: 0 18px 38px #092c451f; }
+.site-home .visual-chart-card>div:first-child span { color: #7894a5; }
+.site-home .visual-chart-card>div:first-child strong { color: #214c69; }
+.site-home .visual-chart-status { background: #e9f3fa; color: #397297; }
+.site-home .visual-chart-card svg path[stroke] { stroke: #1a73ad; }
+.site-home .visual-chart-card svg circle { fill: #1a73ad; }
+.site-home .visual-chart-card svg path:last-child { stroke: #d7e6ee; }
+.site-home .visual-chart-foot { color: #78909f; }
+.site-home .visual-float { border-color: #d3e3ec; box-shadow: 0 13px 30px #092f4918; }
+.site-home .float-icon { background: #e7f2f9; color: #1769aa; }
+.site-home .visual-float b { color: #214c69; }
+.site-home .visual-float small { color: #8299a7; }
+.site-home .home-trust-strip { border-color: #dbe7ef; box-shadow: 0 12px 35px #173f5b0a; }
+.site-home .trust-icon { background: #e9f3fa; color: #1b70aa; }
+.site-home .trust-icon.satellite { background: #eef1fb; color: #5f76b1; }
+.site-home .trust-icon.rain { background: #fff4e7; color: #bd7b37; }
+.site-home .trust-icon.forecast { background: #eaf5f5; color: #268b91; }
+.site-home .home-trust-strip b { color: #244e69; }
+.site-home .home-trust-strip small { color: #728997; }
+.site-home .approach-heading .eyebrow { color: #4f83a3; }
+.site-home .approach-heading .eyebrow-line { background: #4488b1; }
+.site-home .approach-heading h2 { color: #123854; }
+.site-home .approach-heading>p { color: #718997; }
+.site-home .approach-grid article { border-color: #dce8ef; box-shadow: 0 7px 22px #14425f08; }
+.site-home .approach-grid article>span { color: #aac0ce; }
+.site-home .approach-grid article>svg { color: #2173a9; }
+.site-home .approach-grid h3 { color: #244e68; }
+.site-home .approach-grid p { color: #718794; }
+.site-home .home-disclaimer { border-color: #d6e7f1; background: #edf6fb; color: #5f7b8d; }
+.site-home .site-footer { border-color: #dbe6ed; color: #8297a4; }
+.site-home .site-footer>button { color: #1769aa; }
+
+/* Login and signup share the same account layout and use the blue palette. */
+.login-page { color: #153a56; background: #f5f9fc; }
+.login-page .site-brand { color: #123853; }
+.login-page .site-brand small { color: #8298a8; }
+.login-page .brand-mark { background: #e5f2fb; color: #1769aa; }
+.login-page .login-home-link { color: #587389; }
+.login-page .login-home-link:hover { color: #155f99; border-color: #91b9d2; }
+.login-page .login-aside {
+  padding: 30px 26px;
+  border: 1px solid #0e527d;
+  border-radius: 20px;
+  background: linear-gradient(145deg, #082f51 0%, #0c4c7b 58%, #176b94 100%);
+  box-shadow: 0 24px 60px #103b591c;
+}
+.login-page .login-aside::before {
+  position: absolute;
+  inset: auto -120px -270px auto;
+  width: 420px;
+  height: 420px;
+  border: 1px solid #ffffff16;
+  border-radius: 50%;
+  box-shadow: 0 0 0 48px #ffffff08, 0 0 0 96px #ffffff05;
+  content: "";
+  pointer-events: none;
+}
+.login-page .login-aside .home-eyebrow { position: relative; z-index: 1; color: #9bcce1; }
+.login-page .login-aside .home-eyebrow i { background: #61c9c4; box-shadow: 0 0 0 4px #61c9c426; }
+.login-page .login-aside h1 { position: relative; z-index: 1; color: #fff; }
+.login-page .login-aside>p { position: relative; z-index: 1; color: #b9d3e1; }
+.login-page .login-aside-points { position: relative; z-index: 1; color: #d2e5ee; }
+.login-page .login-aside-points svg { color: #75d2ce; }
+.login-page .login-aside-water { opacity: .2; }
+.login-page .login-aside-water span { background: linear-gradient(180deg, #72c7d4, #b7ddeb); }
+.login-page .login-card { border-color: #d5e4ed; border-radius: 18px; box-shadow: 0 28px 70px #103b5914; }
+.login-page .login-lock { background: #e7f2f9; color: #1769aa; }
+.login-page .login-card>.eyebrow { color: #5884a1; }
+.login-page .login-card h2 { color: #153d5a; }
+.login-page .login-card>p { color: #718997; }
+.login-page .login-card label { color: #345a72; }
+.login-page .login-card input { border-color: #d4e3ec; background: #f9fcfd; color: #163a56; }
+.login-page .login-card input:focus { border-color: #64a3ca; box-shadow: 0 0 0 3px #e0eef6; }
+.login-page .primary-cta { background: linear-gradient(135deg, #1a75b8, #125b9a); box-shadow: 0 12px 26px #1769aa28; }
+.login-page .primary-cta:hover { background: linear-gradient(135deg, #14649f, #0e4e84); }
+.login-page .login-back:hover { color: #1769aa; }
+.login-page .auth-message { background: #edf6fb; color: #587b91; }
+.login-page .auth-message.error { border-color: #ecd8d1; background: #fff6f2; color: #a45f48; }
+.login-page .login-footer { border-color: #dbe7ee; color: #8297a4; }
+
+@media(max-width:760px) {
+  .login-page .login-aside { padding: 22px 19px; border-radius: 16px; }
+}
