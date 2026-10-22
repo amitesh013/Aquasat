@@ -106,6 +106,10 @@
 .site-home .site-footer { border-color: #dbe6ed; color: #8297a4; }
 .site-home .site-footer>button { color: #1769aa; }
 
+/* Bring the landing-page illustration and the account form closer to their copy. */
+.site-home .home-hero { gap: clamp(28px, 3.2vw, 48px); }
+.login-page .login-layout { gap: clamp(32px, 4vw, 62px); }
+
 /* Login and signup share the same account layout and use the blue palette. */
 .login-page { color: #153a56; background: #f5f9fc; }
 .login-page .site-brand { color: #123853; }
